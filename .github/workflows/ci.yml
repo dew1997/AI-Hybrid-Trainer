@@ -57,18 +57,7 @@ jobs:
         run: mypy app/ --ignore-missing-imports
 
       - name: Unit tests
-        run: |
-          pytest tests/unit/ -v --tb=short \
-            --cov=app \
-            --cov-report=xml \
-            --cov-report=term-missing
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
-          retention-days: 7
+        run: pytest tests/unit/ -v --tb=short
 
       - name: Integration tests
         env:
@@ -79,8 +68,19 @@ jobs:
           CELERY_RESULT_BACKEND: redis://localhost:6380/2
           SECRET_KEY: test-secret-key-not-for-production
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'test-key' }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
-        run: pytest tests/integration/ -v --tb=short -m "not contract"
+        run: |
+          pytest tests/integration/ -v --tb=short -m "not contract" \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=60
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
 
   frontend:
     name: Frontend — type check & build
