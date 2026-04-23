@@ -56,7 +56,6 @@ to generate evidence-based coaching insights and personalised training plans.
 - Python 3.12+
 - Node.js 20+
 - Anthropic API key
-- OpenAI API key (for embeddings)
 
 ### Backend
 
@@ -166,7 +165,7 @@ Full API docs available at `/docs` when running locally.
 | Charts | Recharts | Composable, works with Recharts ResponsiveContainer |
 | API | FastAPI 0.115 | Async-native, auto-generated OpenAPI docs |
 | Database | PostgreSQL 16 + pgvector | Vector search without extra infrastructure |
-| Embeddings | text-embedding-3-small (OpenAI) | Best retrieval/cost ratio |
+| Embeddings | all-MiniLM-L6-v2 (sentence-transformers) | Local inference, no API cost, 384-dim |
 | LLM | Claude Sonnet 4.6 (Anthropic) | Superior tool_use reliability |
 | Task queue | Celery + Redis | Industry standard, observable, retriable |
 | Deployment | GCP Cloud Run + Cloud SQL | Serverless containers, scales to zero |

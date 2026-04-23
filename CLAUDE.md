@@ -9,7 +9,7 @@ coaching insights and training plans via an AI agent.
 - **Backend**: FastAPI (Python 3.12), async SQLAlchemy + asyncpg
 - **Database**: PostgreSQL 16 + pgvector extension
 - **Queue**: Celery + Redis
-- **AI**: Anthropic Claude claude-sonnet-4-6 (agent), OpenAI text-embedding-3-small (RAG)
+- **AI**: Anthropic Claude claude-sonnet-4-6 (agent), sentence-transformers all-MiniLM-L6-v2 (RAG embeddings)
 - **Deploy**: GCP Cloud Run + Cloud SQL
 
 ## Local Development
