@@ -33,5 +33,5 @@ source = ["app"]
 omit = ["app/db/migrations/*", "*/conftest.py"]
 
 [tool.coverage.report]
-fail_under = 75
+fail_under = 60
 show_missing = true

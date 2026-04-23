@@ -12,7 +12,6 @@ os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6380/1")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6380/2")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
-os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
 from app.core.security import create_access_token
 from app.db.session import Base
@@ -25,6 +24,8 @@ TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 async def test_engine():
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
+        from sqlalchemy import text
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     async with engine.begin() as conn:
