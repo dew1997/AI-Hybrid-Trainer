@@ -21,11 +21,9 @@ def validate_workout(
     warnings: list[str] = []
 
     if body.workout_type == "run":
-        result = _validate_run(body, errors, warnings, user_max_hr)
+        _validate_run(body, errors, warnings, user_max_hr)
     elif body.workout_type == "gym":
-        result = _validate_gym(body, errors, warnings)
-    else:
-        result = ValidationResult(is_valid=True, action="accept")
+        _validate_gym(body, errors, warnings)
 
     if errors:
         return ValidationResult(is_valid=False, action="reject", errors=errors, warnings=warnings)

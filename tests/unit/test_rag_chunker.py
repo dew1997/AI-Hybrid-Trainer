@@ -1,8 +1,6 @@
-import pytest
 
 from app.rag.chunker import (
     CHUNK_SIZE_TOKENS,
-    Chunk,
     chunk_training_article,
     chunk_user_profile,
     chunk_workout_history,

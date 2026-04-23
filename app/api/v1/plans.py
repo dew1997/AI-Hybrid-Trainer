@@ -5,9 +5,8 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.models.training_plan import TrainingPlan, TrainingPlanItem
+from app.models.training_plan import TrainingPlan
 from app.models.user import User
-from app.schemas.agent import TrainingPlanOut
 
 router = APIRouter()
 

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ARRAY,
@@ -18,6 +19,9 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 WorkoutTypeEnum = Enum("run", "gym", "cycle", "other", name="workout_type")
 WorkoutStatusEnum = Enum("pending", "processed", "failed", "quarantined", name="workout_status")

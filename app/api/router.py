@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, workouts, analytics, agent, plans
+from app.api.v1 import agent, analytics, auth, plans, workouts
 
 router = APIRouter()
 

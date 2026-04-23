@@ -52,7 +52,7 @@ def process_workout(self, workout_id: str) -> dict:
 
 async def _process_workout_async(workout_id: str) -> dict:
     from app.db.session import AsyncSessionLocal
-    from app.models.workout import Workout, WorkoutSet
+    from app.models.workout import Workout
     from app.pipeline.metrics import (
         compute_gym_tss,
         compute_gym_volume,
@@ -71,11 +71,6 @@ async def _process_workout_async(workout_id: str) -> dict:
         if not workout:
             logger.error("workout_not_found", workout_id=workout_id)
             return {"error": "workout not found"}
-
-        user_result = await db.execute(
-            select(workout.__class__.__mapper__.relationships["user"].mapper.class_)
-            .where(workout.__class__.__mapper__.relationships["user"].mapper.class_.id == workout.user_id)
-        )
 
         from app.models.user import User
         user_res = await db.execute(select(User).where(User.id == workout.user_id))
@@ -123,6 +118,7 @@ async def _process_workout_async(workout_id: str) -> dict:
 
 async def _update_analytics_snapshot(user_id, workout_date: date, db) -> None:
     from sqlalchemy.dialects.postgresql import insert
+
     from app.models.analytics import AnalyticsSnapshot
     from app.models.workout import Workout
 
@@ -186,12 +182,12 @@ def nightly_analytics_rollup() -> dict:
 
 async def _nightly_rollup_async() -> dict:
     """Recompute ATL/CTL/TSB rolling series for all recently active users."""
+
     from app.db.session import AsyncSessionLocal
     from app.models.analytics import AnalyticsSnapshot
     from app.models.user import User
     from app.models.workout import Workout
     from app.pipeline.metrics import compute_atl_ctl
-    from datetime import datetime, timezone
 
     cutoff = date.today() - timedelta(days=90)
 

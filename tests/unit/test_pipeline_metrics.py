@@ -1,9 +1,7 @@
-import pytest
 
 from app.pipeline.metrics import (
     TrainingLoad,
     compute_atl_ctl,
-    compute_gym_tss,
     compute_gym_volume,
     compute_pace_zone,
     compute_run_tss,

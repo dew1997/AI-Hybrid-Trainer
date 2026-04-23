@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.core.exceptions import AppException
+from app.core.exceptions import AppError
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware
 
@@ -47,8 +47,8 @@ app.add_middleware(
 )
 
 
-@app.exception_handler(AppException)
-async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+@app.exception_handler(AppError)
+async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -72,9 +72,10 @@ async def health():
 
 @app.get("/health/ready", tags=["health"])
 async def health_ready():
-    from sqlalchemy import text
-    from app.db.session import AsyncSessionLocal
     import redis.asyncio as aioredis
+    from sqlalchemy import text
+
+    from app.db.session import AsyncSessionLocal
 
     checks = {}
     try:

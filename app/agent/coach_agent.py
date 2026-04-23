@@ -18,13 +18,12 @@ from app.rag.prompts import (
     COACHING_SYSTEM_PROMPT,
     PLAN_GENERATION_TEMPLATE,
 )
-from app.rag.retriever import hybrid_search, build_rag_context
+from app.rag.retriever import build_rag_context, hybrid_search
 from app.schemas.agent import (
     CoachingQueryRequest,
     CoachingQueryResponse,
     GeneratePlanRequest,
     RetrievedSource,
-    TrainingPlanOut,
 )
 
 logger = structlog.get_logger(__name__)
@@ -121,7 +120,7 @@ async def run_coaching_query(
     db: AsyncSession,
 ) -> CoachingQueryResponse:
     # Pre-fetch user stats and RAG context to populate the prompt
-    from app.agent.tools import _get_user_stats, _get_recent_workouts
+    from app.agent.tools import _get_recent_workouts, _get_user_stats
 
     stats = await _get_user_stats({"weeks_back": request.context_weeks}, str(user.id), db)
     recent = await _get_recent_workouts(
@@ -187,10 +186,10 @@ async def run_generate_plan(
     user: User,
     db: AsyncSession,
 ) -> dict:
-    from app.agent.tools import _get_user_stats, _get_recent_workouts
+    from app.agent.tools import _get_recent_workouts, _get_user_stats
 
     stats = await _get_user_stats({"weeks_back": 8}, str(user.id), db)
-    recent = await _get_recent_workouts({"days_back": 56, "workout_type": "all"}, str(user.id), db)
+    await _get_recent_workouts({"days_back": 56, "workout_type": "all"}, str(user.id), db)
 
     rag_chunks = await hybrid_search(
         query=f"training plan periodization {request.goal}",
@@ -234,9 +233,9 @@ async def run_generate_plan(
     if not plan_calls:
         raise ValueError("Agent did not call create_training_plan — no plan was saved")
 
-    plan_id = None
-    from app.models.training_plan import TrainingPlan
     from sqlalchemy import select
+
+    from app.models.training_plan import TrainingPlan
     result = await db.execute(
         select(TrainingPlan)
         .where(TrainingPlan.user_id == user.id)

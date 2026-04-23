@@ -14,10 +14,9 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
+from app.core.security import create_access_token
 from app.db.session import Base
 from app.main import app
-from app.core.security import create_access_token
-
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 
@@ -45,8 +44,8 @@ async def db_session(test_engine):
 
 @pytest_asyncio.fixture
 async def test_user(db_session: AsyncSession):
-    from app.db.repositories.user_repo import UserRepository
     from app.core.security import hash_password
+    from app.db.repositories.user_repo import UserRepository
 
     repo = UserRepository(db_session)
     user = await repo.create(

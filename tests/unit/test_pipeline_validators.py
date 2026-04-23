@@ -1,6 +1,4 @@
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from app.pipeline.validators import validate_workout
 from app.schemas.workout import WorkoutCreateRequest, WorkoutSetIn
@@ -9,7 +7,7 @@ from app.schemas.workout import WorkoutCreateRequest, WorkoutSetIn
 def _run_workout(**kwargs) -> WorkoutCreateRequest:
     defaults = dict(
         workout_type="run",
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
         duration_seconds=3600,
         distance_meters=10000,
         avg_pace_sec_per_km=360,
@@ -23,7 +21,7 @@ def _gym_workout(**kwargs) -> WorkoutCreateRequest:
     sets = [WorkoutSetIn(set_number=1, exercise_name="squat", reps=5, weight_kg=100.0)]
     defaults = dict(
         workout_type="gym",
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
         duration_seconds=3600,
         sets=sets,
     )

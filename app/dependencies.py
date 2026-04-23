@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import UnauthorizedError
 from app.core.security import decode_token
-from app.db.session import get_db
 from app.db.repositories.user_repo import UserRepository
+from app.db.session import get_db
 from app.models.user import User
 
 bearer_scheme = HTTPBearer()

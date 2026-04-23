@@ -1,44 +1,43 @@
-from fastapi import HTTPException, status
 
 
-class AppException(Exception):
+class AppError(Exception):
     def __init__(self, message: str, status_code: int = 400):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
 
 
-class NotFoundError(AppException):
+class NotFoundError(AppError):
     def __init__(self, resource: str, resource_id: str):
         super().__init__(f"{resource} '{resource_id}' not found", status_code=404)
 
 
-class ValidationError(AppException):
+class ValidationError(AppError):
     def __init__(self, message: str):
         super().__init__(message, status_code=422)
 
 
-class UnauthorizedError(AppException):
+class UnauthorizedError(AppError):
     def __init__(self, message: str = "Not authenticated"):
         super().__init__(message, status_code=401)
 
 
-class ForbiddenError(AppException):
+class ForbiddenError(AppError):
     def __init__(self, message: str = "Access denied"):
         super().__init__(message, status_code=403)
 
 
-class ConflictError(AppException):
+class ConflictError(AppError):
     def __init__(self, message: str):
         super().__init__(message, status_code=409)
 
 
-class PipelineError(AppException):
+class PipelineError(AppError):
     def __init__(self, message: str):
         super().__init__(message, status_code=500)
 
 
-class AgentError(AppException):
+class AgentError(AppError):
     def __init__(self, message: str):
         super().__init__(message, status_code=500)
 
