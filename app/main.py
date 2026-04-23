@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.core.exceptions import AppException
@@ -95,3 +97,18 @@ async def health_ready():
         status_code=200 if all_ok else 503,
         content={"status": "ready" if all_ok else "degraded", "checks": checks},
     )
+
+
+# SPA fallback — must be last so it never shadows API or health routes.
+# Serves real files from dist/ (favicon, robots.txt, etc.) and falls back
+# to index.html for all client-side routes.
+_DIST = Path("frontend/dist")
+if _DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str) -> FileResponse:
+        file = _DIST / full_path
+        if file.is_file():
+            return FileResponse(file)
+        return FileResponse(_DIST / "index.html")
