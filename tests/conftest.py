@@ -1,4 +1,3 @@
-import asyncio
 import os
 
 import pytest
@@ -23,14 +22,7 @@ from app.core.security import create_access_token
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def test_engine():
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:

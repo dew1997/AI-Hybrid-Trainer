@@ -39,23 +39,23 @@ class TestComputeRunTss:
 
 class TestComputePaceZone:
     def test_easy_pace_is_z2(self):
-        # 6:00/km vs 5:00/km threshold = 120% → Z2
+        # 6:00/km vs 5:00/km threshold → ratio 1.20 → Z2
         assert compute_pace_zone(360, 300) == "Z2_aerobic"
 
     def test_very_slow_is_z1(self):
-        # 7:00/km vs 5:00/km threshold = 140% → Z1
+        # 7:00/km vs 5:00/km threshold → ratio 1.40 → Z1
         assert compute_pace_zone(420, 300) == "Z1_recovery"
 
     def test_threshold_pace_is_z3(self):
-        # 5:05/km vs 5:00/km = 101.7% → Z3
-        assert compute_pace_zone(305, 300) == "Z3_tempo"
+        # 5:15/km vs 5:00/km threshold → ratio 1.05 → Z3 (1.03–1.15)
+        assert compute_pace_zone(315, 300) == "Z3_tempo"
 
     def test_fast_pace_is_z4(self):
-        # 4:50/km vs 5:00/km = 96.7% → Z4
+        # 4:50/km vs 5:00/km threshold → ratio 0.967 → Z4 (0.95–1.03)
         assert compute_pace_zone(290, 300) == "Z4_vo2max"
 
     def test_sprint_pace_is_z5(self):
-        # 4:30/km vs 5:00/km = 90% → Z5
+        # 4:30/km vs 5:00/km threshold → ratio 0.90 → Z5
         assert compute_pace_zone(270, 300) == "Z5_sprint"
 
 
@@ -113,9 +113,10 @@ class TestComputeAtlCtl:
         assert result.tsb == 0.0
 
     def test_increasing_load_produces_negative_tsb(self):
-        """Heavy training load: ATL rises faster than CTL → TSB negative."""
-        high_load = [100.0] * 14
-        result = compute_atl_ctl(high_load)
+        """Spike after rest: ATL (7-day EMA) rises faster than CTL (42-day EMA) → TSB negative."""
+        base = [20.0] * 42   # establish a moderate fitness baseline
+        spike = [120.0] * 14  # sudden high load — ATL shoots up faster than CTL
+        result = compute_atl_ctl(base + spike)
         assert result.acute_load > result.chronic_load
         assert result.tsb < 0
 
