@@ -1,0 +1,78 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master, main]
+    tags:
+      - "v*"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push API image
+        run: |
+          IMAGE=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/trainer/api:${{ github.sha }}
+          docker build -f docker/Dockerfile.api -t $IMAGE .
+          docker push $IMAGE
+          echo "API_IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Build and push Worker image
+        run: |
+          IMAGE=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/trainer/worker:${{ github.sha }}
+          docker build -f docker/Dockerfile.worker -t $IMAGE .
+          docker push $IMAGE
+          echo "WORKER_IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Run DB migrations
+        run: |
+          gcloud run jobs execute db-migrate \
+            --region ${{ vars.GCP_REGION }} \
+            --wait \
+            --update-env-vars IMAGE_TAG=${{ github.sha }}
+
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run deploy trainer-api \
+            --image ${{ env.API_IMAGE }} \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --max-instances 5 \
+            --memory 512Mi \
+            --cpu 1 \
+            --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,SECRET_KEY=SECRET_KEY:latest,DATABASE_URL=DATABASE_URL:latest"
+
+      - name: Deploy Worker to Cloud Run
+        run: |
+          gcloud run deploy trainer-worker \
+            --image ${{ env.WORKER_IMAGE }} \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 3 \
+            --memory 1Gi \
+            --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,DATABASE_URL=DATABASE_URL:latest"

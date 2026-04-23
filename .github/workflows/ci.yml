@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: trainer_test
+          POSTGRES_USER: trainer
+          POSTGRES_PASSWORD: trainer
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint with ruff
+        run: ruff check app/ tests/
+
+      - name: Type check with mypy
+        run: mypy app/ --ignore-missing-imports
+        continue-on-error: true
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v --tb=short
+
+      - name: Run integration tests
+        env:
+          ENVIRONMENT: test
+          DATABASE_URL: postgresql+asyncpg://trainer:trainer@localhost:5433/trainer_test
+          REDIS_URL: redis://localhost:6380/0
+          CELERY_BROKER_URL: redis://localhost:6380/1
+          CELERY_RESULT_BACKEND: redis://localhost:6380/2
+          SECRET_KEY: test-secret-key-not-for-production
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST || 'test-key' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_TEST || 'test-key' }}
+        run: pytest tests/integration/ -v --tb=short -m "not contract"
+
+      - name: Coverage report
+        run: |
+          pytest tests/unit/ --cov=app --cov-report=xml --cov-report=term-missing \
+            --cov-fail-under=60
