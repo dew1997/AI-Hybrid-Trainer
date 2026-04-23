@@ -23,9 +23,9 @@ class Settings(BaseSettings):
     # AI
     anthropic_api_key: str
     anthropic_model: str = "claude-sonnet-4-6"
-    openai_api_key: str
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    openai_api_key: str = ""  # optional, not used for embeddings
+    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_dimensions: int = 384
 
     # Auth
     secret_key: str

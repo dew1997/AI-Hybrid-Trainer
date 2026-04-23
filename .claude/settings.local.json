@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh repo *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(docker-compose down *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker-compose logs *)",
+      "Bash(curl *)",
+      "Bash(python3 -m json.tool)"
+    ]
+  }
+}

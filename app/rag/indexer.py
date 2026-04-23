@@ -58,11 +58,11 @@ async def index_chunks(
             "content_hash": hash_,
             "chunk_index": chunk.chunk_index,
             "metadata": chunk.metadata,
-            "embedding": str(embedding),
+            "embedding": embedding,
             "is_active": True,
         })
 
-    await db.execute(insert(Document).values(docs_to_insert))
+    await db.execute(insert(Document.__table__).values(docs_to_insert))
     await db.commit()
 
     logger.info("indexer_chunks_indexed", new=len(docs_to_insert), skipped=len(existing_hashes))

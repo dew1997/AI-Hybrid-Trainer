@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 
 from pydantic import BaseModel, Field
@@ -50,7 +51,7 @@ class GeneratePlanRequest(BaseModel):
 
 
 class TrainingPlanOut(BaseModel):
-    id: str
+    id: uuid.UUID
     goal: str
     duration_weeks: int
     status: str

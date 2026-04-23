@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Literal
 
@@ -63,7 +64,7 @@ class WorkoutUpdateRequest(BaseModel):
 
 
 class RunSplitOut(BaseModel):
-    id: str
+    id: uuid.UUID
     split_number: int
     split_unit: str
     duration_seconds: int
@@ -75,7 +76,7 @@ class RunSplitOut(BaseModel):
 
 
 class WorkoutSetOut(BaseModel):
-    id: str
+    id: uuid.UUID
     set_number: int
     exercise_name: str
     reps: int | None
@@ -86,7 +87,7 @@ class WorkoutSetOut(BaseModel):
 
 
 class WorkoutOut(BaseModel):
-    id: str
+    id: uuid.UUID
     workout_type: str
     status: str
     started_at: datetime

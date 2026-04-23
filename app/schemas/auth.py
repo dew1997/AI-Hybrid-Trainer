@@ -1,6 +1,7 @@
+import uuid
 from datetime import date
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
@@ -32,7 +33,7 @@ class RefreshRequest(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: str
+    id: uuid.UUID
     email: str
     display_name: str | None
     primary_goal: str | None

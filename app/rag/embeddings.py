@@ -1,41 +1,41 @@
+"""
+Local embedding using sentence-transformers (all-MiniLM-L6-v2, 384-dim).
+No API key required — model is downloaded on first use and cached locally.
+"""
+
 import hashlib
 
 import structlog
-from openai import AsyncOpenAI
+from sentence_transformers import SentenceTransformer
 
 from app.config import settings
 
 logger = structlog.get_logger(__name__)
-_client: AsyncOpenAI | None = None
+_model: SentenceTransformer | None = None
 
 
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(api_key=settings.openai_api_key)
-    return _client
+def _get_model() -> SentenceTransformer:
+    global _model
+    if _model is None:
+        logger.info("loading_embedding_model", model=settings.embedding_model)
+        _model = SentenceTransformer(settings.embedding_model)
+    return _model
 
 
 async def embed(text: str) -> list[float]:
-    """Embed a single string. Returns a 1536-dim vector."""
-    client = _get_client()
-    response = await client.embeddings.create(
-        model=settings.embedding_model,
-        input=text.strip(),
-    )
-    return response.data[0].embedding
+    """Embed a single string. Returns a 384-dim vector."""
+    model = _get_model()
+    vector = model.encode(text.strip(), normalize_embeddings=True)
+    return vector.tolist()
 
 
 async def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Embed multiple strings in one API call (max 2048 inputs per call)."""
+    """Embed multiple strings in one pass (CPU/GPU batched)."""
     if not texts:
         return []
-    client = _get_client()
-    response = await client.embeddings.create(
-        model=settings.embedding_model,
-        input=[t.strip() for t in texts],
-    )
-    return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+    model = _get_model()
+    vectors = model.encode([t.strip() for t in texts], normalize_embeddings=True, batch_size=32)
+    return [v.tolist() for v in vectors]
 
 
 def content_hash(text: str) -> str:

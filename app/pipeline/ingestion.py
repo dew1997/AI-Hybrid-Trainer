@@ -1,5 +1,7 @@
 import structlog
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -73,6 +75,14 @@ async def ingest_workout(
         db.add(WorkoutSet(workout_id=workout.id, **set_in.model_dump()))
 
     await db.flush()
+
+    # Re-fetch with relationships eagerly loaded to avoid lazy-load errors
+    result = await db.execute(
+        select(Workout)
+        .options(selectinload(Workout.splits), selectinload(Workout.sets))
+        .where(Workout.id == workout.id)
+    )
+    workout = result.scalar_one()
 
     # Enqueue async pipeline processing (fire-and-forget)
     if status == "pending":
