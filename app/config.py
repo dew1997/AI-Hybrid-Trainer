@@ -46,4 +46,4 @@ class Settings(BaseSettings):
         return self.environment == "test"
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

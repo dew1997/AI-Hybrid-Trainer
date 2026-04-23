@@ -19,7 +19,7 @@ async def get_current_user(
         payload = decode_token(credentials.credentials)
         if payload.get("type") != "access":
             raise UnauthorizedError("Invalid token type")
-        user_id: str = payload.get("sub")
+        user_id: str | None = payload.get("sub")
         if not user_id:
             raise UnauthorizedError("Token missing subject")
     except UnauthorizedError as e:

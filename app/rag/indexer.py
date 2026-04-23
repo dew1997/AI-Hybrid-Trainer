@@ -62,7 +62,7 @@ async def index_chunks(
             "is_active": True,
         })
 
-    await db.execute(insert(Document.__table__).values(docs_to_insert))
+    await db.execute(insert(Document).values(docs_to_insert))
     await db.commit()
 
     logger.info("indexer_chunks_indexed", new=len(docs_to_insert), skipped=len(existing_hashes))

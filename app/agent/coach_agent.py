@@ -60,8 +60,8 @@ async def _run_agent_loop(
             model=settings.anthropic_model,
             max_tokens=2048,
             system=COACHING_SYSTEM_PROMPT,
-            tools=TOOL_DEFINITIONS,
-            messages=messages,
+            tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
+            messages=messages,  # type: ignore[arg-type]
         )
 
         total_input_tokens += response.usage.input_tokens
@@ -88,7 +88,7 @@ async def _run_agent_loop(
                     )
                     result = await execute_tool(
                         tool_name=block.name,
-                        tool_input=block.input,
+                        tool_input=block.input,  # type: ignore[arg-type]
                         user_id=str(user.id),
                         db=db,
                         plan_request=plan_request,
@@ -104,8 +104,8 @@ async def _run_agent_loop(
                         "content": json.dumps(result, default=str),
                     })
 
-            messages.append({"role": "assistant", "content": response.content})
-            messages.append({"role": "user", "content": tool_results})
+            messages.append({"role": "assistant", "content": response.content})  # type: ignore[dict-item]
+            messages.append({"role": "user", "content": tool_results})  # type: ignore[dict-item]
             continue
 
         # Unexpected stop reason
