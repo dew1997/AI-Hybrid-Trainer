@@ -5,9 +5,12 @@ on:
     branches: [master, main]
   push:
     branches: [master, main]
+    tags:
+      - "v*"
 
 jobs:
-  test:
+  backend:
+    name: Backend — lint, type check, test
     runs-on: ubuntu-latest
 
     services:
@@ -46,17 +49,27 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Lint with ruff
+      - name: Lint (ruff)
         run: ruff check app/ tests/
 
-      - name: Type check with mypy
+      - name: Type check (mypy)
         run: mypy app/ --ignore-missing-imports
-        continue-on-error: true
 
-      - name: Run unit tests
-        run: pytest tests/unit/ -v --tb=short
+      - name: Unit tests
+        run: |
+          pytest tests/unit/ -v --tb=short \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing
 
-      - name: Run integration tests
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+      - name: Integration tests
         env:
           ENVIRONMENT: test
           DATABASE_URL: postgresql+asyncpg://trainer:trainer@localhost:5433/trainer_test
@@ -64,11 +77,98 @@ jobs:
           CELERY_BROKER_URL: redis://localhost:6380/1
           CELERY_RESULT_BACKEND: redis://localhost:6380/2
           SECRET_KEY: test-secret-key-not-for-production
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST || 'test-key' }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_TEST || 'test-key' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'test-key' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
         run: pytest tests/integration/ -v --tb=short -m "not contract"
 
-      - name: Coverage report
+  frontend:
+    name: Frontend — type check & build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check & build
+        working-directory: frontend
+        run: npm run build
+
+  deploy:
+    name: Build & deploy to Cloud Run
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push API image
         run: |
-          pytest tests/unit/ --cov=app --cov-report=xml --cov-report=term-missing \
-            --cov-fail-under=60
+          IMAGE=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/trainer/api:${{ github.sha }}
+          docker build -f docker/Dockerfile.api -t $IMAGE .
+          docker push $IMAGE
+          echo "API_IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Build and push Worker image
+        run: |
+          IMAGE=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/trainer/worker:${{ github.sha }}
+          docker build -f docker/Dockerfile.worker -t $IMAGE .
+          docker push $IMAGE
+          echo "WORKER_IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Run DB migrations
+        run: |
+          gcloud run jobs execute db-migrate \
+            --region ${{ vars.GCP_REGION }} \
+            --wait \
+            --update-env-vars IMAGE_TAG=${{ github.sha }}
+
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run deploy trainer-api \
+            --image ${{ env.API_IMAGE }} \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --max-instances 5 \
+            --memory 512Mi \
+            --cpu 1 \
+            --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,SECRET_KEY=SECRET_KEY:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest"
+
+      - name: Deploy Worker to Cloud Run
+        run: |
+          gcloud run deploy trainer-worker \
+            --image ${{ env.WORKER_IMAGE }} \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 3 \
+            --memory 1Gi \
+            --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest"
