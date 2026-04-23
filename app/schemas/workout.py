@@ -20,7 +20,7 @@ class WorkoutSetIn(BaseModel):
     set_number: int = Field(ge=1)
     exercise_name: str = Field(min_length=1, max_length=100)
     reps: int | None = Field(default=None, ge=1, le=500)
-    weight_kg: float | None = Field(default=None, ge=0, le=600)
+    weight_kg: float | None = Field(default=None, ge=0, le=10_000)
     duration_seconds: int | None = Field(default=None, ge=1)
     rest_seconds: int | None = Field(default=None, ge=0)
     is_warmup: bool = False
@@ -34,11 +34,11 @@ class WorkoutCreateRequest(BaseModel):
     notes: str | None = None
     perceived_effort: int | None = Field(default=None, ge=1, le=10)
 
-    # Run fields
-    distance_meters: float | None = Field(default=None, ge=100, le=200_000)
-    avg_pace_sec_per_km: float | None = Field(default=None, ge=120, le=1200)
-    avg_hr: int | None = Field(default=None, ge=60, le=220)
-    max_hr: int | None = Field(default=None, ge=60, le=230)
+    # Run fields — wide bounds here; business-logic limits enforced by pipeline validators
+    distance_meters: float | None = Field(default=None, ge=1, le=1_000_000)
+    avg_pace_sec_per_km: float | None = Field(default=None, ge=1, le=7200)
+    avg_hr: int | None = Field(default=None, ge=1, le=300)
+    max_hr: int | None = Field(default=None, ge=1, le=300)
     elevation_gain_m: float | None = Field(default=None, ge=0)
     route_name: str | None = Field(default=None, max_length=200)
     splits: list[RunSplitIn] = []
