@@ -68,8 +68,8 @@ def auth_headers(test_user):
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest_asyncio.fixture
-async def async_client():
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def async_client(test_engine):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
