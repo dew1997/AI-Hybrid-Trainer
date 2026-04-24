@@ -118,8 +118,12 @@ async def update_workout(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from sqlalchemy.orm import selectinload
+
     result = await db.execute(
-        select(Workout).where(Workout.id == workout_id, Workout.user_id == current_user.id)
+        select(Workout)
+        .options(selectinload(Workout.splits), selectinload(Workout.sets))
+        .where(Workout.id == workout_id, Workout.user_id == current_user.id)
     )
     workout = result.scalar_one_or_none()
     if not workout:
@@ -128,8 +132,14 @@ async def update_workout(
     for key, value in body.model_dump(exclude_none=True).items():
         setattr(workout, key, value)
     await db.flush()
-    await db.refresh(workout)
-    return WorkoutOut.model_validate(workout)
+    # Re-query after flush so pydantic reads fresh (non-expired) attributes
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(Workout)
+        .options(selectinload(Workout.splits), selectinload(Workout.sets))
+        .where(Workout.id == workout_id)
+    )
+    return WorkoutOut.model_validate(result.scalar_one())
 
 
 @router.delete("/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)

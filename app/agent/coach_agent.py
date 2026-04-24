@@ -6,7 +6,8 @@ Uses Anthropic's native tool_use API — no LangChain or framework overhead.
 import json
 
 import structlog
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, BadRequestError, APIStatusError
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.tools import TOOL_DEFINITIONS, execute_tool
@@ -56,13 +57,24 @@ async def _run_agent_loop(
     total_output_tokens = 0
 
     for turn in range(MAX_AGENT_TURNS):
-        response = await client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=2048,
-            system=COACHING_SYSTEM_PROMPT,
-            tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
-            messages=messages,  # type: ignore[arg-type]
-        )
+        try:
+            response = await client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=2048,
+                system=COACHING_SYSTEM_PROMPT,
+                tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
+                messages=messages,  # type: ignore[arg-type]
+            )
+        except BadRequestError as e:
+            msg = str(e)
+            if "credit balance is too low" in msg or "billing" in msg.lower():
+                raise HTTPException(
+                    status_code=402,
+                    detail="Anthropic API credits exhausted. Please top up at console.anthropic.com.",
+                )
+            raise HTTPException(status_code=400, detail=f"AI request invalid: {msg}")
+        except APIStatusError as e:
+            raise HTTPException(status_code=503, detail=f"AI service unavailable: {e.status_code}")
 
         total_input_tokens += response.usage.input_tokens
         total_output_tokens += response.usage.output_tokens

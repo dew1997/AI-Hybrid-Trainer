@@ -20,6 +20,7 @@ python-multipart==0.0.17
 
 # Task queue
 celery[redis]==5.4.0
+celery-redbeat==2.2.0
 redis==5.2.1
 
 # AI

@@ -43,9 +43,12 @@ async def hybrid_search(
     query_embedding = await embed(query)
     candidate_k = top_k * 3
 
+    # Format embedding as pgvector literal string for raw SQL
+    embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+
     source_clause = ""
     params: dict = {
-        "embedding": str(query_embedding),
+        "embedding": embedding_str,
         "user_id": user_id,
         "candidate_k": candidate_k,
         "query": query,
@@ -65,12 +68,12 @@ async def hybrid_search(
             title,
             source_type,
             metadata,
-            1 - (embedding <=> :embedding::vector) AS semantic_score
+            1 - (embedding <=> CAST(:embedding AS vector)) AS semantic_score
         FROM documents
         WHERE is_active = TRUE
           AND {user_clause}
           {source_clause}
-        ORDER BY embedding <=> :embedding::vector
+        ORDER BY embedding <=> CAST(:embedding AS vector)
         LIMIT :candidate_k
     """)
 

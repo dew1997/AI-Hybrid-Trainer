@@ -93,6 +93,8 @@ class WorkoutOut(BaseModel):
     started_at: datetime
     duration_seconds: int | None
     perceived_effort: int | None
+    notes: str | None
+    route_name: str | None
     # Run
     distance_meters: float | None
     avg_pace_sec_per_km: float | None
