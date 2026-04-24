@@ -50,14 +50,15 @@ class TestLogWorkout:
         resp = await async_client.post("/api/v1/workouts", json=_run_payload(), headers=headers)
         assert resp.status_code == 201
         data = resp.json()
-        assert data["workout_type"] == "run"
-        assert "id" in data
+        assert "workout" in data
+        assert data["workout"]["workout_type"] == "run"
+        assert "id" in data["workout"]
 
     async def test_log_gym_returns_201(self, async_client: AsyncClient):
         headers = {"Authorization": f"Bearer {await _token(async_client)}"}
         resp = await async_client.post("/api/v1/workouts", json=_gym_payload(), headers=headers)
         assert resp.status_code == 201
-        assert resp.json()["workout_type"] == "gym"
+        assert resp.json()["workout"]["workout_type"] == "gym"
 
     async def test_log_workout_requires_auth(self, async_client: AsyncClient):
         resp = await async_client.post("/api/v1/workouts", json=_run_payload())

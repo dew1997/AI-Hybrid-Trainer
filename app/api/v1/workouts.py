@@ -69,7 +69,11 @@ async def list_workouts(
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
 
-    result = await db.execute(query.limit(limit + 1))
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        query.limit(limit + 1)
+        .options(selectinload(Workout.splits), selectinload(Workout.sets))
+    )
     workouts = result.scalars().all()
 
     has_more = len(workouts) > limit
