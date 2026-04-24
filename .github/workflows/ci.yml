@@ -57,7 +57,7 @@ jobs:
         run: mypy app/ --ignore-missing-imports
 
       - name: Unit tests
-        run: pytest tests/unit/ -v --tb=short
+        run: pytest tests/unit/ -v --tb=short --cov=app --cov-report=term-missing
 
       - name: Integration tests
         env:
@@ -71,6 +71,7 @@ jobs:
         run: |
           pytest tests/integration/ -v --tb=short -m "not contract" \
             --cov=app \
+            --cov-append \
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=60
