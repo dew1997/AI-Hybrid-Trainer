@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 import pytest
 from httpx import AsyncClient
 
+pytestmark = pytest.mark.asyncio(loop_scope="session")
+
 
 def _email():
     return f"athlete-{uuid.uuid4().hex[:8]}@example.com"

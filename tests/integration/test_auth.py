@@ -3,6 +3,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+pytestmark = pytest.mark.asyncio(loop_scope="session")
+
 
 def _email():
     return f"user-{uuid.uuid4().hex[:8]}@example.com"
