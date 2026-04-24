@@ -8,7 +8,7 @@ A walkthrough of every folder, file, and how they all connect.
 
 An AI-powered fitness coaching platform for **hybrid athletes** — people who
 run *and* lift. You log your workouts, the app computes your fitness/fatigue
-metrics, and you can chat with an AI coach (Claude) that knows your training
+metrics, and you can chat with an AI coach that knows your training
 history and answers questions or generates personalised multi-week plans.
 
 ---
@@ -27,7 +27,7 @@ history and answers questions or generates personalised multi-week plans.
 └────┬──────────────┬──────────────────────┬───────────────────┬──┘
      │              │                      │                   │
      ▼              ▼                      ▼                   ▼
-PostgreSQL      Celery Worker         Claude API         Sentence-
+PostgreSQL      Celery Worker         OpenRouter LLM     Sentence-
 (main DB +    (background jobs)    (AI coaching &     Transformers
  pgvector)                          plan generation)   (embeddings)
      ▲              │
@@ -41,7 +41,7 @@ PostgreSQL      Celery Worker         Claude API         Sentence-
 1. You open the app → React frontend loads from the same server (FastAPI serves the built React files).
 2. You log a workout → React calls `POST /api/v1/workouts` → FastAPI validates the data and saves it to PostgreSQL → drops a job onto the **Redis queue**.
 3. The **Celery worker** picks up the job → computes your TSS (training stress score), updates your fitness metrics (ATL/CTL/TSB) → writes results back to PostgreSQL.
-4. You ask the AI coach a question → FastAPI fetches your recent workouts + pulls relevant training articles from the knowledge base (RAG) → sends everything to Claude → streams the answer back to you.
+4. You ask the AI coach a question → FastAPI fetches your recent workouts + pulls relevant training articles from the knowledge base (RAG) → sends everything to the LLM → streams the answer back to you.
 
 ---
 
@@ -66,7 +66,7 @@ app/
 ├── schemas/               ← Pydantic request/response shapes (see below)
 ├── pipeline/              ← Data processing + background jobs (see below)
 ├── rag/                   ← Knowledge base + retrieval system (see below)
-└── agent/                 ← Claude AI coaching agent (see below)
+└── agent/                 ← AI coaching agent (see below)
 ```
 
 ### `app/main.py` — The Entry Point
@@ -83,7 +83,7 @@ that starts everything.
 ### `app/config.py` — Settings
 
 Reads from your `.env` file. Every configurable value lives here — database
-URL, Redis URL, Anthropic API key, JWT secret, token expiry times, etc.
+URL, Redis URL, OpenRouter API key, JWT secret, token expiry times, etc.
 Import `settings` anywhere in the app to access them.
 
 ---
@@ -236,9 +236,9 @@ Update analytics_snapshots: rebuild this week's ATL/CTL/TSB
 
 ## RAG (Knowledge Base) — `app/rag/`
 
-RAG = Retrieval-Augmented Generation. Before asking Claude a question, we
+RAG = Retrieval-Augmented Generation. Before calling the AI with a question, we
 pull relevant training science articles and your personal workout history
-so Claude answers with *your* data, not generic advice.
+so the AI answers with *your* data, not generic advice.
 
 ```
 app/rag/
@@ -246,7 +246,7 @@ app/rag/
 ├── chunker.py     ← Split articles/workouts into smaller pieces for indexing
 ├── indexer.py     ← Save chunks + their embeddings into PostgreSQL (pgvector)
 ├── retriever.py   ← Search for relevant chunks (semantic + keyword, combined with RRF)
-└── prompts.py     ← The system prompt and templates sent to Claude
+└── prompts.py     ← The system prompt and templates sent to the LLM
 ```
 
 ### How retrieval works
@@ -269,7 +269,7 @@ Reciprocal Rank Fusion (RRF): combine both result lists into one ranked list
 Top chunks assembled into prompt context (capped at 2400 tokens)
         │
         ▼
-Claude receives: your question + your athlete profile + top chunks
+LLM receives: your question + your athlete profile + top chunks
 ```
 
 **Why hybrid?** Semantic search finds *concepts* ("fatigue", "overreaching")
@@ -280,16 +280,16 @@ Combining both gives better results than either alone.
 
 ## AI Agent — `app/agent/`
 
-The Claude integration. Uses Anthropic's native `tool_use` API — Claude can
+The AI agent uses OpenRouter (OpenAI-compatible API) — the LLM can
 call functions (tools) to look things up, rather than just generating text.
 
 ```
 app/agent/
 ├── coach_agent.py  ← The agent loop: prompt → tool calls → prompt → answer
-└── tools.py        ← Four tools Claude can call + their implementations
+└── tools.py        ← Four tools the LLM can call + their implementations
 ```
 
-### Tools Claude can use
+### Tools the LLM can use
 
 | Tool | What it does |
 |------|-------------|
@@ -308,16 +308,16 @@ coach_agent.py:
   1. Pre-fetch your athlete profile + last 4 weeks of workouts
   2. Run hybrid RAG search on your question
   3. Build prompt: system prompt + your profile + RAG context + question
-  4. Send to Claude (claude-sonnet-4-6)
+  4. Send to LLM (meta/llama-3.3-70b-instruct:free)
       │
       ▼
-Claude responds with tool_use: get_user_stats()
+LLM responds with a tool call: get_user_stats()
       │
       ▼
 tools.py executes get_user_stats() → returns CTL=65, ATL=72, TSB=-7
       │
       ▼
-Claude receives tool result, responds with more tool_use or final answer
+LLM receives tool result, responds with another tool call or final answer
       │  (up to 6 turns)
       ▼
 Final answer: "Your TSB is -7, meaning you're slightly fatigued…"
@@ -520,9 +520,9 @@ Copy `.env.example` to `.env` and fill in the blanks:
 | `REDIS_URL` | Yes | Redis connection (used by the API) |
 | `CELERY_BROKER_URL` | Yes | Redis connection (used by Celery) |
 | `CELERY_RESULT_BACKEND` | Yes | Redis connection (stores job results) |
-| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key for Claude |
+| `OPENROUTER_API_KEY` | Yes | Your OpenRouter API key (free at openrouter.ai) |
 | `SECRET_KEY` | Yes | JWT signing key — generate with `openssl rand -hex 32` |
-| `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6` |
+| `OPENROUTER_MODEL` | No | Defaults to `meta/llama-3.3-70b-instruct:free` |
 | `EMBEDDING_MODEL` | No | Defaults to `all-MiniLM-L6-v2` (local, no API key needed) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Defaults to 15 |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | No | Defaults to 7 |
@@ -539,7 +539,7 @@ cd AI-Hybrid-Trainer
 
 # 2. Copy and fill in environment variables
 cp .env.example .env
-# Edit .env: set ANTHROPIC_API_KEY and generate a SECRET_KEY
+# Edit .env: set OPENROUTER_API_KEY and generate a SECRET_KEY
 
 # 3. Start all services (PostgreSQL, Redis, API, workers)
 docker-compose up

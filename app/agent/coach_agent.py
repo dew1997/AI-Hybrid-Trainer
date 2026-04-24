@@ -1,13 +1,13 @@
 """
-Multi-turn Claude agent for coaching queries and training plan generation.
-Uses Anthropic's native tool_use API — no LangChain or framework overhead.
+AI agent for coaching queries and training plan generation.
+Uses OpenRouter (OpenAI-compatible API) with free LLMs — no vendor lock-in.
 """
 
 import json
 
 import structlog
-from anthropic import APIStatusError, AsyncAnthropic, BadRequestError
 from fastapi import HTTPException
+from openai import APIStatusError, AsyncOpenAI, AuthenticationError, BadRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.tools import TOOL_DEFINITIONS, execute_tool
@@ -28,16 +28,19 @@ from app.schemas.agent import (
 )
 
 logger = structlog.get_logger(__name__)
-_anthropic: AsyncAnthropic | None = None
+_client: AsyncOpenAI | None = None
 
 MAX_AGENT_TURNS = 6
 
 
-def _get_client() -> AsyncAnthropic:
-    global _anthropic
-    if _anthropic is None:
-        _anthropic = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _anthropic
+def _get_client() -> AsyncOpenAI:
+    global _client
+    if _client is None:
+        _client = AsyncOpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+        )
+    return _client
 
 
 async def _run_agent_loop(
@@ -47,80 +50,94 @@ async def _run_agent_loop(
     plan_request=None,
 ) -> tuple[str, list[dict], dict]:
     """
-    Core multi-turn agent loop.
+    Core multi-turn agent loop using OpenAI chat completions format.
     Returns: (final_answer, tool_calls_log, token_usage)
     """
     client = _get_client()
-    messages = [{"role": "user", "content": user_message}]
+    messages: list[dict] = [
+        {"role": "system", "content": COACHING_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
     tool_calls_log: list[dict] = []
     total_input_tokens = 0
     total_output_tokens = 0
 
     for turn in range(MAX_AGENT_TURNS):
         try:
-            response = await client.messages.create(
-                model=settings.anthropic_model,
+            response = await client.chat.completions.create(
+                model=settings.openrouter_model,
                 max_tokens=2048,
-                system=COACHING_SYSTEM_PROMPT,
                 tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
                 messages=messages,  # type: ignore[arg-type]
             )
+        except AuthenticationError:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid OpenRouter API key. Check OPENROUTER_API_KEY in your .env.",
+            )
         except BadRequestError as e:
-            msg = str(e)
-            if "credit balance is too low" in msg or "billing" in msg.lower():
-                raise HTTPException(
-                    status_code=402,
-                    detail="Anthropic API credits exhausted. Please top up at console.anthropic.com.",
-                )
-            raise HTTPException(status_code=400, detail=f"AI request invalid: {msg}")
+            raise HTTPException(status_code=400, detail=f"AI request invalid: {e}")
         except APIStatusError as e:
             raise HTTPException(status_code=503, detail=f"AI service unavailable: {e.status_code}")
 
-        total_input_tokens += response.usage.input_tokens
-        total_output_tokens += response.usage.output_tokens
+        choice = response.choices[0]
+        if response.usage:
+            total_input_tokens += response.usage.prompt_tokens
+            total_output_tokens += response.usage.completion_tokens
 
-        if response.stop_reason == "end_turn":
-            text = "".join(
-                block.text for block in response.content if hasattr(block, "text")
-            )
-            return text, tool_calls_log, {
+        if choice.finish_reason == "stop":
+            return choice.message.content or "", tool_calls_log, {
                 "input": total_input_tokens,
                 "output": total_output_tokens,
             }
 
-        if response.stop_reason == "tool_use":
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    logger.info(
-                        "agent_tool_call",
-                        tool=block.name,
-                        turn=turn + 1,
-                        user_id=str(user.id),
-                    )
-                    result = await execute_tool(
-                        tool_name=block.name,
-                        tool_input=block.input,  # type: ignore[arg-type]
-                        user_id=str(user.id),
-                        db=db,
-                        plan_request=plan_request,
-                    )
-                    tool_calls_log.append({
-                        "tool": block.name,
-                        "input": block.input,
-                        "result_keys": list(result.keys()) if isinstance(result, dict) else [],
-                    })
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": json.dumps(result, default=str),
-                    })
+        if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+            # Append assistant message with tool_calls
+            messages.append({
+                "role": "assistant",
+                "content": choice.message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in choice.message.tool_calls
+                ],
+            })
 
-            messages.append({"role": "assistant", "content": response.content})  # type: ignore[dict-item]
-            messages.append({"role": "user", "content": tool_results})  # type: ignore[dict-item]
+            # Execute each tool and append results
+            for tc in choice.message.tool_calls:
+                tool_input = json.loads(tc.function.arguments)
+                logger.info(
+                    "agent_tool_call",
+                    tool=tc.function.name,
+                    turn=turn + 1,
+                    user_id=str(user.id),
+                )
+                result = await execute_tool(
+                    tool_name=tc.function.name,
+                    tool_input=tool_input,
+                    user_id=str(user.id),
+                    db=db,
+                    plan_request=plan_request,
+                )
+                tool_calls_log.append({
+                    "tool": tc.function.name,
+                    "input": tool_input,
+                    "result_keys": list(result.keys()) if isinstance(result, dict) else [],
+                })
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(result, default=str),
+                })
             continue
 
-        # Unexpected stop reason
+        # Unexpected finish reason
         break
 
     raise AgentMaxTurnsError(MAX_AGENT_TURNS)

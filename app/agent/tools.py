@@ -13,113 +13,125 @@ logger = structlog.get_logger(__name__)
 
 TOOL_DEFINITIONS = [
     {
-        "name": "search_knowledge_base",
-        "description": (
-            "Search the training science knowledge base and the athlete's workout history "
-            "for relevant coaching information. Use this to find evidence-based principles "
-            "on periodization, recovery, HR zones, strength training, and nutrition."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "The search query"},
-                "source_filter": {
-                    "type": "string",
-                    "enum": ["all", "training_science", "workout_history", "user_profile"],
-                    "description": "Restrict results to a specific source type",
+        "type": "function",
+        "function": {
+            "name": "search_knowledge_base",
+            "description": (
+                "Search the training science knowledge base and the athlete's workout history "
+                "for relevant coaching information. Use this to find evidence-based principles "
+                "on periodization, recovery, HR zones, strength training, and nutrition."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query"},
+                    "source_filter": {
+                        "type": "string",
+                        "enum": ["all", "training_science", "workout_history", "user_profile"],
+                        "description": "Restrict results to a specific source type",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "default": 5,
+                        "minimum": 1,
+                        "maximum": 10,
+                        "description": "Number of results to return",
+                    },
                 },
-                "top_k": {
-                    "type": "integer",
-                    "default": 5,
-                    "minimum": 1,
-                    "maximum": 10,
-                    "description": "Number of results to return",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "get_user_stats",
-        "description": (
-            "Retrieve computed fitness analytics for the athlete: CTL (chronic training load), "
-            "ATL (acute load), TSB (form), weekly volume averages, and personal bests."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "weeks_back": {
-                    "type": "integer",
-                    "default": 8,
-                    "minimum": 1,
-                    "maximum": 52,
-                },
+                "required": ["query"],
             },
         },
     },
     {
-        "name": "get_recent_workouts",
-        "description": "Retrieve the athlete's detailed workout log for a recent period.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "days_back": {"type": "integer", "default": 28, "maximum": 90},
-                "workout_type": {
-                    "type": "string",
-                    "enum": ["all", "run", "gym"],
-                    "default": "all",
-                },
-            },
-        },
-    },
-    {
-        "name": "create_training_plan",
-        "description": (
-            "Persist a structured training plan to the database. Call this ONLY after "
-            "fully designing the plan. The plan will be saved and returned to the user."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "goal": {"type": "string"},
-                "duration_weeks": {"type": "integer", "minimum": 1, "maximum": 16},
-                "explanation": {
-                    "type": "string",
-                    "description": "Natural language summary of the plan rationale",
-                },
-                "weeks": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "week_number": {"type": "integer"},
-                            "theme": {"type": "string"},
-                            "target_tss": {"type": "number"},
-                            "sessions": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "day_of_week": {"type": "integer", "minimum": 1, "maximum": 7},
-                                        "session_type": {"type": "string"},
-                                        "title": {"type": "string"},
-                                        "description": {"type": "string"},
-                                        "duration_min": {"type": "integer"},
-                                        "target_distance_km": {"type": "number"},
-                                        "target_pace_min_per_km": {"type": "number"},
-                                        "target_hr_zone": {"type": "integer"},
-                                        "target_rpe": {"type": "integer"},
-                                        "exercises": {"type": "array"},
-                                    },
-                                    "required": ["day_of_week", "session_type", "title"],
-                                },
-                            },
-                        },
-                        "required": ["week_number", "theme", "sessions"],
+        "type": "function",
+        "function": {
+            "name": "get_user_stats",
+            "description": (
+                "Retrieve computed fitness analytics for the athlete: CTL (chronic training load), "
+                "ATL (acute load), TSB (form), weekly volume averages, and personal bests."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "weeks_back": {
+                        "type": "integer",
+                        "default": 8,
+                        "minimum": 1,
+                        "maximum": 52,
                     },
                 },
             },
-            "required": ["goal", "weeks", "explanation"],
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_recent_workouts",
+            "description": "Retrieve the athlete's detailed workout log for a recent period.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days_back": {"type": "integer", "default": 28, "maximum": 90},
+                    "workout_type": {
+                        "type": "string",
+                        "enum": ["all", "run", "gym"],
+                        "default": "all",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_training_plan",
+            "description": (
+                "Persist a structured training plan to the database. Call this ONLY after "
+                "fully designing the plan. The plan will be saved and returned to the user."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string"},
+                    "duration_weeks": {"type": "integer", "minimum": 1, "maximum": 16},
+                    "explanation": {
+                        "type": "string",
+                        "description": "Natural language summary of the plan rationale",
+                    },
+                    "weeks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "week_number": {"type": "integer"},
+                                "theme": {"type": "string"},
+                                "target_tss": {"type": "number"},
+                                "sessions": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "day_of_week": {"type": "integer", "minimum": 1, "maximum": 7},
+                                            "session_type": {"type": "string"},
+                                            "title": {"type": "string"},
+                                            "description": {"type": "string"},
+                                            "duration_min": {"type": "integer"},
+                                            "target_distance_km": {"type": "number"},
+                                            "target_pace_min_per_km": {"type": "number"},
+                                            "target_hr_zone": {"type": "integer"},
+                                            "target_rpe": {"type": "integer"},
+                                            "exercises": {"type": "array"},
+                                        },
+                                        "required": ["day_of_week", "session_type", "title"],
+                                    },
+                                },
+                            },
+                            "required": ["week_number", "theme", "sessions"],
+                        },
+                    },
+                },
+                "required": ["goal", "weeks", "explanation"],
+            },
         },
     },
 ]
@@ -274,7 +286,7 @@ async def _create_training_plan(
         goal=inputs["goal"],
         duration_weeks=inputs.get("duration_weeks", len(inputs["weeks"])),
         status="draft",
-        model_used=settings.anthropic_model,
+        model_used=settings.openrouter_model,
         prompt_version="v1.0",
         ai_explanation=inputs.get("explanation"),
         raw_llm_output=inputs,

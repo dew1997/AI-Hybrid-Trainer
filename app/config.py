@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 
-    # AI
-    anthropic_api_key: str
-    anthropic_model: str = "claude-sonnet-4-6"
-    openai_api_key: str = ""  # optional, not used for embeddings
+    # AI — OpenRouter (https://openrouter.ai)
+    openrouter_api_key: str
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimensions: int = 384
 

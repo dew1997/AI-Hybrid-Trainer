@@ -434,9 +434,9 @@ def test_ai_coaching(client: httpx.Client, token: str) -> None:
                  "How should I balance my training this week to avoid overtraining?",
         "context_weeks": 4,
     }, timeout=60)
-    if r.status_code == 402:
-        warn("Anthropic API credits exhausted — skipping AI tests (top up at console.anthropic.com)")
-        record("AI coaching query returns answer + sources", True, "(skipped — no API credits)")
+    if r.status_code in (401, 402):
+        warn("OpenRouter API key missing or invalid — skipping AI tests (set OPENROUTER_API_KEY in .env)")
+        record("AI coaching query returns answer + sources", True, "(skipped — no API key)")
         return
     passed = assert_status(r, 200, "coaching query")
     if passed:
@@ -468,9 +468,9 @@ def test_plan_generation(client: httpx.Client, token: str) -> str:
         "weeks": 4,
         "constraints": ["3 gym sessions and 3 runs per week maximum", "Sundays are rest days"],
     }, timeout=90)
-    if r.status_code == 402:
-        warn("Anthropic API credits exhausted — skipping plan generation")
-        record("Generate 4-week hybrid training plan", True, "(skipped — no API credits)")
+    if r.status_code in (401, 402):
+        warn("OpenRouter API key missing or invalid — skipping plan generation")
+        record("Generate 4-week hybrid training plan", True, "(skipped — no API key)")
         return ""
     passed = assert_status(r, 200, "generate plan")
     plan_id = ""
