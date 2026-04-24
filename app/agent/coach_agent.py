@@ -243,20 +243,28 @@ async def run_generate_plan(
 
     plan_calls = [tc for tc in tool_calls if tc["tool"] == "create_training_plan"]
     if not plan_calls:
-        raise ValueError("Agent did not call create_training_plan — no plan was saved")
+        raise HTTPException(
+            status_code=400,
+            detail="The AI did not produce a training plan. Try rephrasing your goal and try again.",
+        )
 
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
     from app.models.training_plan import TrainingPlan
     result = await db.execute(
         select(TrainingPlan)
+        .options(selectinload(TrainingPlan.items))
         .where(TrainingPlan.user_id == user.id)
         .order_by(TrainingPlan.created_at.desc())
     )
     plan = result.scalars().first()
 
     if not plan:
-        raise ValueError("Could not retrieve saved plan from database")
+        raise HTTPException(
+            status_code=500,
+            detail="Training plan was saved but could not be retrieved.",
+        )
 
     plan.generation_metadata = {"token_usage": usage, "rag_sources": len(rag_chunks)}
     await db.flush()
@@ -266,8 +274,22 @@ async def run_generate_plan(
         "goal": plan.goal,
         "duration_weeks": plan.duration_weeks,
         "status": plan.status,
+        "created_at": plan.created_at.isoformat(),
         "ai_explanation": plan.ai_explanation,
-        "weeks": plan_calls[0]["input"].get("weeks", []),
+        "items": [
+            {
+                "id": str(item.id),
+                "week_number": item.week_number,
+                "day_of_week": item.day_of_week,
+                "session_type": item.session_type,
+                "title": item.title,
+                "description": item.description,
+                "duration_min": item.duration_min,
+                "target_distance_km": float(item.target_distance_km) if item.target_distance_km else None,
+                "is_completed": item.is_completed,
+            }
+            for item in sorted(plan.items, key=lambda x: (x.week_number, x.day_of_week))
+        ],
         "token_usage": usage,
     }
 

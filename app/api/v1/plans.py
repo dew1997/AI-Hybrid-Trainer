@@ -54,6 +54,7 @@ async def get_plan(
         "goal": plan.goal,
         "status": plan.status,
         "duration_weeks": plan.duration_weeks,
+        "created_at": plan.created_at.isoformat(),
         "ai_explanation": plan.ai_explanation,
         "items": [
             {

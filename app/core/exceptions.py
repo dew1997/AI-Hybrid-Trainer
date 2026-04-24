@@ -45,3 +45,4 @@ class AgentError(AppError):
 class AgentMaxTurnsError(AgentError):
     def __init__(self, max_turns: int):
         super().__init__(f"Agent exceeded maximum of {max_turns} turns without a final answer")
+        self.status_code = 503

@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -50,13 +50,28 @@ class GeneratePlanRequest(BaseModel):
     constraints: list[str] = []
 
 
+class PlanItemOut(BaseModel):
+    id: uuid.UUID
+    week_number: int
+    day_of_week: int
+    session_type: str
+    title: str
+    description: str | None = None
+    duration_min: int | None = None
+    target_distance_km: float | None = None
+    is_completed: bool
+
+    model_config = {"from_attributes": True}
+
+
 class TrainingPlanOut(BaseModel):
     id: uuid.UUID
     goal: str
     duration_weeks: int
     status: str
+    created_at: datetime
     ai_explanation: str | None
-    weeks: list[WeekPlan]
+    items: list[PlanItemOut]
     token_usage: dict[str, int] | None = None
 
     model_config = {"from_attributes": True}

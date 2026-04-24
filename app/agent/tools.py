@@ -302,5 +302,6 @@ async def _create_training_plan(
             db.add(item)
 
     await db.flush()
+    await db.commit()
     logger.info("training_plan_created", plan_id=str(plan.id), goal=plan.goal)
     return {"plan_id": str(plan.id), "status": "created", "weeks": len(inputs["weeks"])}
