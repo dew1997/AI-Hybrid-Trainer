@@ -16,12 +16,11 @@ The script creates a fresh test account each run (email includes a timestamp)
 so it never conflicts with previous runs.
 """
 
-import asyncio
 import json
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -113,7 +112,7 @@ def wait_for_api(timeout: int = 60) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            r = httpx.get(f"http://localhost:8000/health", timeout=3)
+            r = httpx.get("http://localhost:8000/health", timeout=3)
             if r.status_code == 200:
                 return True
         except Exception:
@@ -270,7 +269,7 @@ def test_workouts(client: httpx.Client, token: str) -> tuple[str, str]:
     section("2 — WORKOUTS")
     headers = {"Authorization": f"Bearer {token}"}
 
-    started = datetime.now(timezone.utc) - timedelta(hours=2)
+    started = datetime.now(UTC) - timedelta(hours=2)
 
     # Log a run
     r = client.post("/workouts", headers=headers, json={
@@ -302,7 +301,7 @@ def test_workouts(client: httpx.Client, token: str) -> tuple[str, str]:
         info(f"Run ID: {run_id}  |  status: {w.get('status')}")
 
     # Log a gym session
-    gym_start = datetime.now(timezone.utc) - timedelta(hours=26)
+    gym_start = datetime.now(UTC) - timedelta(hours=26)
     r = client.post("/workouts", headers=headers, json={
         "workout_type": "gym",
         "started_at": gym_start.isoformat(),

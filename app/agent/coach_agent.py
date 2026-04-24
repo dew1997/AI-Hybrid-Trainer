@@ -6,7 +6,7 @@ Uses Anthropic's native tool_use API — no LangChain or framework overhead.
 import json
 
 import structlog
-from anthropic import AsyncAnthropic, BadRequestError, APIStatusError
+from anthropic import APIStatusError, AsyncAnthropic, BadRequestError
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
