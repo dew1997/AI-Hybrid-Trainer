@@ -29,8 +29,8 @@ class RequestContextMiddleware:
         async def send_wrapper(message: MutableMapping[str, object]) -> None:
             nonlocal status_code
             if message["type"] == "http.response.start":
-                status_code = message["status"]
-                headers = list(message.get("headers", []))
+                status_code = int(message["status"])  # type: ignore[arg-type]
+                headers = list(message.get("headers", []))  # type: ignore[arg-type]
                 headers.append((b"x-request-id", request_id.encode()))
                 message = {**message, "headers": headers}
             await send(message)
