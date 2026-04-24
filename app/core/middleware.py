@@ -1,6 +1,7 @@
 import time
 import uuid
 from collections.abc import MutableMapping
+from typing import Any
 
 import structlog
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -26,11 +27,11 @@ class RequestContextMiddleware:
         method = scope.get("method", "")
         path = scope.get("path", "")
 
-        async def send_wrapper(message: MutableMapping[str, object]) -> None:
+        async def send_wrapper(message: MutableMapping[str, Any]) -> None:
             nonlocal status_code
             if message["type"] == "http.response.start":
-                status_code = int(message["status"])  # type: ignore[arg-type]
-                headers = list(message.get("headers", []))  # type: ignore[arg-type]
+                status_code = int(message["status"])
+                headers = list(message.get("headers", []))
                 headers.append((b"x-request-id", request_id.encode()))
                 message = {**message, "headers": headers}
             await send(message)
