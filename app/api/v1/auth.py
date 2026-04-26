@@ -40,6 +40,8 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         primary_goal=body.primary_goal,
         experience_level=body.experience_level,
         weekly_hours_target=body.weekly_hours_target,
+        max_hr=body.max_hr,
+        resting_hr=body.resting_hr,
     )
 
     sub = str(user.id)

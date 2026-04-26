@@ -205,8 +205,8 @@ def test_auth(client: httpx.Client) -> tuple[str, str]:
         "email": email,
         "password": password,
         "display_name": "UAT Athlete",
-        "goal": "hybrid_performance",
-        "experience": "intermediate",
+        "primary_goal": "hybrid_performance",
+        "experience_level": "intermediate",
         "weight_kg": 75.0,
         "max_hr": 185,
         "resting_hr": 52,
@@ -424,7 +424,7 @@ def test_analytics(client: httpx.Client, token: str) -> None:
 
 
 def test_ai_coaching(client: httpx.Client, token: str) -> None:
-    section("4 — AI COACHING (calls Claude API — may take 10–20 s)")
+    section("4 — AI COACHING (calls OpenRouter API — may take 10–20 s)")
     headers = {"Authorization": f"Bearer {token}"}
 
     # Coaching query
@@ -433,11 +433,19 @@ def test_ai_coaching(client: httpx.Client, token: str) -> None:
         "query": "I just did a 10 km run and a push session this week. "
                  "How should I balance my training this week to avoid overtraining?",
         "context_weeks": 4,
-    }, timeout=60)
+    }, timeout=180)
     if r.status_code in (401, 402):
         warn("OpenRouter API key missing or invalid — skipping AI tests (set OPENROUTER_API_KEY in .env)")
         record("AI coaching query returns answer + sources", True, "(skipped — no API key)")
         return
+    if r.status_code == 429:
+        warn("Rate limit hit — waiting 90 s and retrying…")
+        time.sleep(90)
+        r = client.post("/agent/coaching-query", headers=headers, json={
+            "query": "I just did a 10 km run and a push session this week. "
+                     "How should I balance my training this week to avoid overtraining?",
+            "context_weeks": 4,
+        }, timeout=180)
     passed = assert_status(r, 200, "coaching query")
     if passed:
         body = r.json()
@@ -458,7 +466,9 @@ def test_ai_coaching(client: httpx.Client, token: str) -> None:
 
 def test_plan_generation(client: httpx.Client, token: str) -> str:
     """Returns plan_id."""
-    section("5 — TRAINING PLAN GENERATION (calls Claude API — may take 20–30 s)")
+    section("5 — TRAINING PLAN GENERATION (calls OpenRouter API — may take 20–40 s)")
+    info("Waiting 90 s to avoid free-tier rate limit after coaching query…")
+    time.sleep(90)
     headers = {"Authorization": f"Bearer {token}"}
 
     # Generate plan
@@ -472,6 +482,14 @@ def test_plan_generation(client: httpx.Client, token: str) -> str:
         warn("OpenRouter API key missing or invalid — skipping plan generation")
         record("Generate 4-week hybrid training plan", True, "(skipped — no API key)")
         return ""
+    if r.status_code == 429:
+        warn("Rate limit hit — waiting 90 s and retrying…")
+        time.sleep(90)
+        r = client.post("/agent/generate-plan", headers=headers, json={
+            "goal": "Improve my 10 km run time while maintaining strength",
+            "weeks": 4,
+            "constraints": ["3 gym sessions and 3 runs per week maximum", "Sundays are rest days"],
+        }, timeout=180)
     passed = assert_status(r, 200, "generate plan")
     plan_id = ""
     if passed:

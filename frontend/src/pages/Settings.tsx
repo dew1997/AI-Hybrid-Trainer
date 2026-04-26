@@ -4,7 +4,7 @@ import { authApi } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 
-const GOALS = ['marathon', 'strength', 'fat_loss', 'general']
+const GOALS = ['marathon', 'strength', 'fat_loss', 'general', 'hybrid_performance']
 const LEVELS = ['beginner', 'intermediate', 'advanced']
 
 export function Settings() {
@@ -14,6 +14,7 @@ export function Settings() {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [weightKg, setWeightKg] = useState(user?.weight_kg?.toString() ?? '')
   const [maxHr, setMaxHr] = useState(user?.max_hr?.toString() ?? '')
+  const [restingHr, setRestingHr] = useState(user?.resting_hr?.toString() ?? '')
   const [vo2max, setVo2max] = useState(user?.vo2max_estimate?.toString() ?? '')
   const [goal, setGoal] = useState(user?.primary_goal ?? 'general')
   const [experience, setExperience] = useState(user?.experience_level ?? 'intermediate')
@@ -24,6 +25,7 @@ export function Settings() {
         display_name: displayName || undefined,
         weight_kg: weightKg ? +weightKg : undefined,
         max_hr: maxHr ? +maxHr : undefined,
+        resting_hr: restingHr ? +restingHr : undefined,
         vo2max_estimate: vo2max ? +vo2max : undefined,
         primary_goal: goal || undefined,
         experience_level: experience || undefined,
@@ -124,6 +126,16 @@ export function Settings() {
                 onChange={e => setMaxHr(e.target.value)}
                 className={inputCls}
                 placeholder="185"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Resting heart rate (bpm)</label>
+              <input
+                type="number"
+                value={restingHr}
+                onChange={e => setRestingHr(e.target.value)}
+                className={inputCls}
+                placeholder="55"
               />
             </div>
             <div>

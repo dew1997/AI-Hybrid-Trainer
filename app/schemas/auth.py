@@ -11,9 +11,11 @@ class RegisterRequest(BaseModel):
     date_of_birth: date | None = None
     weight_kg: float | None = Field(default=None, ge=30, le=300)
     height_cm: float | None = Field(default=None, ge=100, le=250)
-    primary_goal: str | None = Field(default=None, pattern="^(marathon|strength|fat_loss|general)$")
+    primary_goal: str | None = Field(default=None, pattern="^(marathon|strength|fat_loss|general|hybrid_performance)$")
     experience_level: str | None = Field(default=None, pattern="^(beginner|intermediate|advanced)$")
     weekly_hours_target: float | None = Field(default=None, ge=1, le=40)
+    max_hr: int | None = Field(default=None, ge=140, le=220)
+    resting_hr: int | None = Field(default=None, ge=30, le=100)
 
 
 class LoginRequest(BaseModel):
@@ -40,6 +42,7 @@ class UserOut(BaseModel):
     experience_level: str | None
     weight_kg: float | None
     max_hr: int | None
+    resting_hr: int | None
     vo2max_estimate: float | None
 
     model_config = {"from_attributes": True}
@@ -53,6 +56,6 @@ class ProfileUpdateRequest(BaseModel):
     max_hr: int | None = Field(default=None, ge=140, le=220)
     ftp_watts: int | None = Field(default=None, ge=50, le=500)
     vo2max_estimate: float | None = Field(default=None, ge=20, le=90)
-    primary_goal: str | None = Field(default=None, pattern="^(marathon|strength|fat_loss|general)$")
+    primary_goal: str | None = Field(default=None, pattern="^(marathon|strength|fat_loss|general|hybrid_performance)$")
     experience_level: str | None = Field(default=None, pattern="^(beginner|intermediate|advanced)$")
     weekly_hours_target: float | None = Field(default=None, ge=1, le=40)

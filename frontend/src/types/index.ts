@@ -6,6 +6,7 @@ export interface User {
   experience_level: string | null
   weight_kg: number | null
   max_hr: number | null
+  resting_hr: number | null
   vo2max_estimate: number | null
 }
 
