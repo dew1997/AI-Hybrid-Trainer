@@ -187,9 +187,12 @@ async def _nightly_rollup_async() -> dict:
     from app.models.analytics import AnalyticsSnapshot
     from app.models.user import User
     from app.models.workout import Workout
-    from app.pipeline.metrics import compute_atl_ctl
 
     cutoff = date.today() - timedelta(days=90)
+
+    # EMA decay constants for 7-day ATL and 42-day CTL
+    k_atl = 2 / (7 + 1)
+    k_ctl = 2 / (42 + 1)
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -208,14 +211,21 @@ async def _nightly_rollup_async() -> dict:
             if not snaps:
                 continue
 
-            tss_series = [float(s.weekly_tss or 0) / 7 for s in snaps]  # daily avg
-            load = compute_atl_ctl(tss_series)
+            # Compute EMA incrementally so every snapshot gets ATL/CTL/TSB,
+            # not just the most recent one (which was the previous bug).
+            daily_series = [float(s.weekly_tss or 0) / 7 for s in snaps]
+            atl = ctl = daily_series[0]
+            snaps[0].acute_load = round(atl, 2)
+            snaps[0].chronic_load = round(ctl, 2)
+            snaps[0].training_stress_balance = round(ctl - atl, 2)
 
-            # Update most recent snapshot
-            latest = snaps[-1]
-            latest.acute_load = load.acute_load
-            latest.chronic_load = load.chronic_load
-            latest.training_stress_balance = load.tsb
+            for i, tss in enumerate(daily_series[1:], start=1):
+                atl = tss * k_atl + atl * (1 - k_atl)
+                ctl = tss * k_ctl + ctl * (1 - k_ctl)
+                snaps[i].acute_load = round(atl, 2)
+                snaps[i].chronic_load = round(ctl, 2)
+                snaps[i].training_stress_balance = round(ctl - atl, 2)
+
             processed += 1
 
         await db.commit()
