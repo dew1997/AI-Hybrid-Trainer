@@ -159,7 +159,7 @@ async def _update_analytics_snapshot(user_id, workout_date: date, db) -> None:
         weekly_tss=total_tss,
         avg_pace_sec_per_km=avg_pace,
     ).on_conflict_do_update(
-        constraint="uq_analytics_user_week",
+        index_elements=["user_id", "week_start_date"],
         set_={
             "total_workouts": len(week_workouts),
             "run_workouts": len(runs),
