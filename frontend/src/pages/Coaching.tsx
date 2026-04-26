@@ -64,7 +64,7 @@ export function Coaching() {
       <div className="mb-4">
         <h1 className="text-xl font-bold text-white">AI Coaching</h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          Ask anything about your training — powered by Claude
+          Ask anything about your training — powered by AI
         </p>
       </div>
 

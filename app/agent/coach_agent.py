@@ -3,11 +3,12 @@ AI agent for coaching queries and training plan generation.
 Uses OpenRouter (OpenAI-compatible API) with free LLMs — no vendor lock-in.
 """
 
+import asyncio
 import json
 
 import structlog
 from fastapi import HTTPException
-from openai import APIStatusError, AsyncOpenAI, AuthenticationError, BadRequestError
+from openai import APIStatusError, AsyncOpenAI, AuthenticationError, BadRequestError, RateLimitError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.tools import TOOL_DEFINITIONS, execute_tool
@@ -70,6 +71,22 @@ async def _run_agent_loop(
                 tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
                 messages=messages,  # type: ignore[arg-type]
             )
+        except RateLimitError:
+            # Free tier rate limit — wait 60 s and retry once before giving up
+            logger.warning("openrouter_rate_limit", turn=turn, user_id=str(user.id))
+            await asyncio.sleep(60)
+            try:
+                response = await client.chat.completions.create(
+                    model=settings.openrouter_model,
+                    max_tokens=2048,
+                    tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
+                    messages=messages,  # type: ignore[arg-type]
+                )
+            except RateLimitError:
+                raise HTTPException(
+                    status_code=429,
+                    detail="AI rate limit hit. Please wait a minute and try again.",
+                )
         except AuthenticationError:
             raise HTTPException(
                 status_code=401,
@@ -214,7 +231,7 @@ async def run_generate_plan(
     request: GeneratePlanRequest,
     user: User,
     db: AsyncSession,
-) -> dict:
+):
     from app.agent.tools import _get_recent_workouts, _get_user_stats
 
     stats = await _get_user_stats({"weeks_back": 8}, str(user.id), db)
@@ -286,29 +303,20 @@ async def run_generate_plan(
     plan.generation_metadata = {"token_usage": usage, "rag_sources": len(rag_chunks)}
     await db.flush()
 
-    return {
-        "id": str(plan.id),
-        "goal": plan.goal,
-        "duration_weeks": plan.duration_weeks,
-        "status": plan.status,
-        "created_at": plan.created_at.isoformat(),
-        "ai_explanation": plan.ai_explanation,
-        "items": [
-            {
-                "id": str(item.id),
-                "week_number": item.week_number,
-                "day_of_week": item.day_of_week,
-                "session_type": item.session_type,
-                "title": item.title,
-                "description": item.description,
-                "duration_min": item.duration_min,
-                "target_distance_km": float(item.target_distance_km) if item.target_distance_km else None,
-                "is_completed": item.is_completed,
-            }
+    from app.schemas.agent import PlanItemOut, TrainingPlanOut
+    return TrainingPlanOut(
+        id=plan.id,
+        goal=plan.goal,
+        duration_weeks=plan.duration_weeks,
+        status=plan.status,
+        created_at=plan.created_at,
+        ai_explanation=plan.ai_explanation,
+        items=[
+            PlanItemOut.model_validate(item)
             for item in sorted(plan.items, key=lambda x: (x.week_number, x.day_of_week))
         ],
-        "token_usage": usage,
-    }
+        token_usage=usage,
+    )
 
 
 def _summarise_workouts(workouts: list[dict]) -> str:
@@ -339,12 +347,14 @@ def _fmt_pace(pace_sec: float | None) -> str:
 
 def _extract_action_items(text: str) -> list[str]:
     """Pull out bullet-point action items from the agent's response."""
-    lines = text.split("\n")
+    import re
+    pattern = re.compile(r"^[-*]\s+\*{0,2}[Aa]ction\b", re.IGNORECASE)
     actions = []
-    for line in lines:
+    for line in text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("- **Action"):
-            actions.append(stripped.lstrip("- ").strip())
-        elif stripped.startswith("**Action"):
-            actions.append(stripped.strip())
+        if pattern.match(stripped):
+            cleaned = re.sub(r"^[-*]\s+", "", stripped)
+            cleaned = re.sub(r"\*+", "", cleaned).strip()
+            if cleaned:
+                actions.append(cleaned)
     return actions[:3]
