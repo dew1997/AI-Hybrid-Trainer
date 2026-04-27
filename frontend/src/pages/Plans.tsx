@@ -108,15 +108,25 @@ function PlanView({ plan }: { plan: TrainingPlanDetail }) {
   )
 }
 
+const GOALS = [
+  { value: '2.4km',          label: '2.4 km',        sub: 'Fitness test' },
+  { value: '5K',             label: '5K',             sub: 'Parkrun / starter' },
+  { value: '10K',            label: '10K',            sub: 'Classic road race' },
+  { value: 'half-marathon',  label: 'Half Marathon',  sub: '21.1 km' },
+  { value: 'marathon',       label: 'Marathon',       sub: '42.2 km' },
+]
+
+const WEEK_OPTIONS = [4, 6, 8, 10, 12, 16]
+const DAY_OPTIONS  = [2, 3, 4, 5, 6]
+
 export function Plans() {
   const qc = useQueryClient()
   const { toast } = useToast()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [goal, setGoal] = useState('')
-  const [weeks, setWeeks] = useState('4')
-  const [hours, setHours] = useState('')
-  const [constraints, setConstraints] = useState('')
+  const [weeks, setWeeks] = useState(8)
+  const [trainingDays, setTrainingDays] = useState(4)
   const [genError, setGenError] = useState('')
 
   const { data: plans, isLoading } = useQuery({
@@ -134,15 +144,14 @@ export function Plans() {
     mutationFn: () =>
       agentApi.generatePlan({
         goal,
-        weeks: +weeks,
-        weekly_hours: hours ? +hours : undefined,
-        constraints: constraints ? constraints.split(',').map(s => s.trim()) : [],
+        weeks,
+        training_days_per_week: trainingDays,
       }),
     onSuccess: res => {
       qc.invalidateQueries({ queryKey: ['plans'] })
       setGenerating(false)
       setSelectedId(res.data.id)
-      setGoal(''); setWeeks('4'); setHours(''); setConstraints('')
+      setGoal('')
       toast('success', 'Training plan generated!')
     },
     onError: (err: any) => {
@@ -170,8 +179,12 @@ export function Plans() {
   const selectedPlan = plans?.find(p => p.id === selectedId)
   const isActive = selectedPlan?.status === 'active'
 
-  const inputCls =
-    'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors'
+  const chipCls = (active: boolean) =>
+    `px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer ${
+      active
+        ? 'bg-indigo-600 border-indigo-500 text-white'
+        : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+    }`
 
   return (
     <div className="space-y-5">
@@ -181,7 +194,7 @@ export function Plans() {
           <p className="text-sm text-slate-400 mt-0.5">AI-generated personalised plans</p>
         </div>
         <button
-          onClick={() => setGenerating(g => !g)}
+          onClick={() => { setGenerating(g => !g); setGenError('') }}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           <Sparkles size={14} />
@@ -191,53 +204,73 @@ export function Plans() {
 
       {/* Generate form */}
       {generating && (
-        <div className="bg-slate-800/60 border border-indigo-500/30 rounded-xl p-5 space-y-4">
+        <div className="bg-slate-800/60 border border-indigo-500/30 rounded-xl p-5 space-y-5">
           <h2 className="text-sm font-semibold text-white">New training plan</h2>
+
+          {/* Goal selector */}
           <div>
-            <label className="text-xs text-slate-400 block mb-1">Goal *</label>
-            <input
-              value={goal}
-              onChange={e => setGoal(e.target.value)}
-              className={inputCls}
-              placeholder="Complete a half marathon in under 2 hours in 8 weeks"
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Duration (weeks)</label>
-              <input
-                type="number" min={2} max={16}
-                value={weeks}
-                onChange={e => setWeeks(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Weekly hours</label>
-              <input
-                type="number"
-                value={hours}
-                onChange={e => setHours(e.target.value)}
-                className={inputCls}
-                placeholder="6"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Constraints</label>
-              <input
-                value={constraints}
-                onChange={e => setConstraints(e.target.value)}
-                className={inputCls}
-                placeholder="no Mondays"
-              />
+            <p className="text-xs text-slate-400 mb-2">Race goal *</p>
+            <div className="grid grid-cols-5 gap-2">
+              {GOALS.map(g => (
+                <button
+                  key={g.value}
+                  type="button"
+                  onClick={() => setGoal(g.value)}
+                  className={`flex flex-col items-center justify-center rounded-xl border py-3 px-2 transition-colors cursor-pointer ${
+                    goal === g.value
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  <span className="text-base font-bold">{g.label}</span>
+                  <span className="text-xs text-slate-400 mt-0.5">{g.sub}</span>
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Duration selector */}
+          <div>
+            <p className="text-xs text-slate-400 mb-2">Duration</p>
+            <div className="flex flex-wrap gap-2">
+              {WEEK_OPTIONS.map(w => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setWeeks(w)}
+                  className={chipCls(weeks === w)}
+                >
+                  {w} wks
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Training days selector */}
+          <div>
+            <p className="text-xs text-slate-400 mb-2">Training days per week</p>
+            <div className="flex gap-2">
+              {DAY_OPTIONS.map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setTrainingDays(d)}
+                  className={chipCls(trainingDays === d)}
+                >
+                  {d}
+                </button>
+              ))}
+              <span className="text-xs text-slate-500 self-center ml-1">days / week</span>
+            </div>
+          </div>
+
           {genError && (
             <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
               {genError}
             </p>
           )}
-          <div className="flex gap-2">
+
+          <div className="flex items-center gap-3">
             <button
               onClick={() => generateMutation.mutate()}
               disabled={!goal || generateMutation.isPending}
@@ -254,12 +287,10 @@ export function Plans() {
             >
               Cancel
             </button>
+            {generateMutation.isPending && (
+              <p className="text-xs text-slate-500">AI is designing your plan — ~30 seconds…</p>
+            )}
           </div>
-          {generateMutation.isPending && (
-            <p className="text-xs text-slate-500">
-              Claude is designing your personalised plan… this takes ~30 seconds.
-            </p>
-          )}
         </div>
       )}
 

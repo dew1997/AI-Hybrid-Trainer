@@ -7,9 +7,8 @@ export const agentApi = {
 
   generatePlan: (data: {
     goal: string
-    weeks?: number
-    weekly_hours?: number
-    constraints?: string[]
+    weeks: number
+    training_days_per_week: number
   }) => api.post('/agent/generate-plan', data),
 
   listPlans: () => api.get<TrainingPlan[]>('/agent/plans'),
