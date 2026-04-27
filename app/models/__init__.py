@@ -1,4 +1,5 @@
 from app.models.analytics import AnalyticsSnapshot
+from app.models.coaching import ChatMessage, CoachingSession
 from app.models.document import Document
 from app.models.training_plan import TrainingPlan, TrainingPlanItem
 from app.models.user import User
@@ -13,4 +14,6 @@ __all__ = [
     "Document",
     "TrainingPlan",
     "TrainingPlanItem",
+    "CoachingSession",
+    "ChatMessage",
 ]

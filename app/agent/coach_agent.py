@@ -253,12 +253,51 @@ async def run_coaching_query(
         tool_calls=len(tool_calls),
     )
 
+    # Persist session + messages
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from app.models.coaching import ChatMessage, CoachingSession
+
+    if request.session_id:
+        sess_result = await db.execute(
+            select(CoachingSession).where(
+                CoachingSession.id == request.session_id,
+                CoachingSession.user_id == user.id,
+            )
+        )
+        session = sess_result.scalar_one_or_none()
+        if not session:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Coaching session not found")
+    else:
+        session = CoachingSession(
+            user_id=user.id,
+            title=request.query[:80],
+        )
+        db.add(session)
+        await db.flush()
+
+    db.add(ChatMessage(session_id=session.id, role="user", content=request.query))
+    db.add(ChatMessage(
+        session_id=session.id,
+        role="assistant",
+        content=answer,
+        sources=[{"title": s.title, "relevance": s.relevance} for s in sources],
+        actions=action_items,
+        token_usage=usage,
+    ))
+    session.updated_at = datetime.now(UTC)
+    await db.commit()
+
     return CoachingQueryResponse(
         answer=answer,
         reasoning=None,
         sources=sources,
         suggested_actions=action_items,
         token_usage=usage,
+        session_id=session.id,
     )
 
 

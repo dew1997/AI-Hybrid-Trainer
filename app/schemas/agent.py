@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 class CoachingQueryRequest(BaseModel):
     query: str = Field(min_length=5, max_length=1000)
     context_weeks: int = Field(default=4, ge=1, le=12)
+    session_id: uuid.UUID | None = None
 
 
 class RetrievedSource(BaseModel):
@@ -20,6 +21,32 @@ class CoachingQueryResponse(BaseModel):
     sources: list[RetrievedSource]
     suggested_actions: list[str]
     token_usage: dict[str, int]
+    session_id: uuid.UUID
+
+
+class ChatMessageOut(BaseModel):
+    id: uuid.UUID
+    role: str
+    content: str
+    sources: list[RetrievedSource] = []
+    actions: list[str] = []
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CoachingSessionOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class CoachingSessionDetailOut(CoachingSessionOut):
+    messages: list[ChatMessageOut] = []
 
 
 class SessionPlanItem(BaseModel):
