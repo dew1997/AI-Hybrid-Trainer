@@ -33,6 +33,13 @@ _client: AsyncOpenAI | None = None
 
 MAX_AGENT_TURNS = 6
 
+# Required by OpenRouter for free-tier models — identifies the calling app.
+# Without these headers the API returns 401 even with a valid key.
+_OR_HEADERS = {
+    "HTTP-Referer": "http://localhost:8000",
+    "X-Title": "AI Hybrid Trainer",
+}
+
 
 def _raise_for_api_status(exc: "APIStatusError") -> None:
     """Convert OpenRouter API error codes to descriptive HTTPExceptions."""
@@ -81,6 +88,7 @@ async def _run_agent_loop(
             response = await client.chat.completions.create(
                 model=settings.openrouter_model,
                 max_tokens=2048,
+                extra_headers=_OR_HEADERS,
                 tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
                 messages=messages,  # type: ignore[arg-type]
             )
@@ -92,6 +100,7 @@ async def _run_agent_loop(
                 response = await client.chat.completions.create(
                     model=settings.openrouter_model,
                     max_tokens=2048,
+                    extra_headers=_OR_HEADERS,
                     tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
                     messages=messages,  # type: ignore[arg-type]
                 )

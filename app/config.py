@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # AI — OpenRouter (https://openrouter.ai)
     openrouter_api_key: str
-    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    openrouter_model: str = "openai/gpt-oss-20b:free"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimensions: int = 384
