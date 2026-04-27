@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import ReactMarkdown from 'react-markdown'
 import { agentApi } from '../api/agent'
 import { useToast } from '../hooks/useToast'
 import { Spinner } from '../components/Spinner'
@@ -115,7 +116,21 @@ export function Coaching() {
                   ? 'bg-indigo-600 text-white'
                   : 'bg-slate-800 border border-slate-700 text-slate-200'
               }`}>
-                {m.content}
+                {m.role === 'user' ? m.content : (
+                  <ReactMarkdown components={{
+                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                    strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                    em: ({ children }) => <em className="italic text-slate-300">{children}</em>,
+                    ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2">{children}</ol>,
+                    li: ({ children }) => <li className="text-slate-200">{children}</li>,
+                    h3: ({ children }) => <h3 className="font-semibold text-white mt-3 mb-1">{children}</h3>,
+                    h4: ({ children }) => <h4 className="font-medium text-slate-100 mt-2 mb-0.5">{children}</h4>,
+                    code: ({ children }) => <code className="bg-slate-700 rounded px-1 py-0.5 text-xs font-mono text-slate-200">{children}</code>,
+                  }}>
+                    {m.content}
+                  </ReactMarkdown>
+                )}
               </div>
 
               {m.actions && m.actions.length > 0 && (
