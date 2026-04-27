@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { workoutsApi } from '../api/workouts'
 import { useToast } from '../hooks/useToast'
-import { CheckCircle, Plus, Trash2, Copy, History } from 'lucide-react'
+import { CheckCircle, Plus, Trash2, Copy, History, ArrowRight } from 'lucide-react'
 import { formatWeekDate } from '../lib/utils'
 
 // ── types ──────────────────────────────────────────────────────────────────
@@ -125,9 +125,94 @@ function ChipGroup<T extends string>({
   )
 }
 
+// ── ExercisePicker ─────────────────────────────────────────────────────────
+
+type HistoryMap = Record<string, { date: string; sets: { reps: number | null; weight_kg: number | null }[] }>
+
+function ExercisePicker({
+  value,
+  historyMap,
+  onChange,
+  onPickFromHistory,
+}: {
+  value: string
+  historyMap: HistoryMap
+  onChange: (name: string) => void
+  onPickFromHistory: (name: string, sets: SetRow[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const lower = value.toLowerCase()
+  const matches = Object.keys(historyMap)
+    .filter(k => lower.length === 0 || k.toLowerCase().includes(lower))
+    .slice(0, 8)
+
+  const pick = (name: string) => {
+    const history = historyMap[name]
+    const sets: SetRow[] = history
+      ? history.sets.map(s => ({
+          id: Math.random().toString(36).slice(2),
+          reps: s.reps?.toString() ?? '',
+          weight_kg: s.weight_kg?.toString() ?? '',
+          is_warmup: false,
+        }))
+      : [makeSet()]
+    onPickFromHistory(name, sets)
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative flex-1">
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        className="w-full bg-transparent text-sm font-medium text-white placeholder-slate-500 focus:outline-none"
+        placeholder="Exercise name…"
+        autoComplete="off"
+      />
+      {open && matches.length > 0 && (
+        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-xl shadow-xl max-h-56 overflow-y-auto">
+          {value.length === 0 && (
+            <p className="px-3 pt-2 pb-1 text-xs text-slate-500">Your exercises — tap to add with previous weights</p>
+          )}
+          {matches.map(name => {
+            const h = historyMap[name]
+            const preview = h.sets.slice(0, 3).map(s => `${s.reps}×${s.weight_kg}`).join(' · ')
+            return (
+              <button
+                key={name}
+                type="button"
+                onMouseDown={() => pick(name)}
+                className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-700 transition-colors text-left"
+              >
+                <div>
+                  <span className="text-sm text-white">{name}</span>
+                  <p className="text-xs text-slate-500 mt-0.5">{preview}</p>
+                </div>
+                <span className="text-xs text-slate-600">{formatWeekDate(h.date)}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── constants ──────────────────────────────────────────────────────────────
 
-const SESSION_TYPES = ['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Full Body', 'Cardio', 'Other']
+// A/B variants so users can track PPL rotation
+const SESSION_TYPES = ['Push A', 'Push B', 'Pull A', 'Pull B', 'Legs A', 'Legs B', 'Upper', 'Lower', 'Full Body', 'Cardio', 'Other']
 const MUSCLE_OPTIONS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Core', 'Quads', 'Hamstrings', 'Glutes', 'Calves']
 
 // ── main component ──────────────────────────────────────────────────────────
@@ -158,12 +243,13 @@ export function LogWorkout() {
   const [exercises, setExercises] = useState<Exercise[]>([makeExercise()])
 
   // Exercise history + PR maps (fetched once on mount)
-  const [historyMap, setHistoryMap] = useState<Record<string, { date: string; sets: { reps: number | null; weight_kg: number | null }[] }>>({})
+  const [historyMap, setHistoryMap] = useState<HistoryMap>({})
   const [prMap, setPrMap] = useState<Record<string, { estimated_1rm: number; weight_kg: number; reps: number }>>({})
+  const [nextSession, setNextSession] = useState<{ label: string; date: string } | null>(null)
 
   useEffect(() => {
     workoutsApi.exerciseHistory().then(r => {
-      const map: typeof historyMap = {}
+      const map: HistoryMap = {}
       for (const item of r.data) map[item.exercise_name] = { date: item.date, sets: item.sets }
       setHistoryMap(map)
     }).catch(() => {})
@@ -171,6 +257,19 @@ export function LogWorkout() {
       const map: typeof prMap = {}
       for (const pr of r.data) map[pr.exercise_name] = { estimated_1rm: pr.estimated_1rm, weight_kg: pr.weight_kg, reps: pr.reps }
       setPrMap(map)
+    }).catch(() => {})
+    // A/B rotation: find the last gym session's template
+    workoutsApi.list({ workout_type: 'gym', limit: 5 }).then(r => {
+      const lastTemplate = r.data.data.find(w => w.workout_template)?.workout_template
+      if (!lastTemplate) return
+      // Suggest the other variant: Push A→Push B, Pull B→Pull A, Legs A→Legs B, etc.
+      const match = lastTemplate.match(/^(Push|Pull|Legs|Upper|Lower)\s*([AB])$/i)
+      if (match) {
+        const base = match[1]
+        const variant = match[2].toUpperCase() === 'A' ? 'B' : 'A'
+        const lastDate = r.data.data.find(w => w.workout_template === lastTemplate)?.started_at ?? ''
+        setNextSession({ label: `${base} ${variant}`, date: lastDate })
+      }
     }).catch(() => {})
   }, [])
 
@@ -201,19 +300,10 @@ export function LogWorkout() {
   const removeExercise = (exId: string) =>
     setExercises(prev => prev.filter(e => e.id !== exId))
 
-  const copyLastSession = (exId: string, exName: string) => {
-    const history = historyMap[exName]
-    if (!history) return
-    setExercises(prev => prev.map(e => {
-      if (e.id !== exId) return e
-      const newSets = history.sets.map(s => ({
-        id: Math.random().toString(36).slice(2),
-        reps: s.reps?.toString() ?? '',
-        weight_kg: s.weight_kg?.toString() ?? '',
-        is_warmup: false,
-      }))
-      return { ...e, sets: newSets.length > 0 ? newSets : e.sets }
-    }))
+  const pickExercise = (exId: string, name: string, sets: SetRow[]) => {
+    setExercises(prev => prev.map(e =>
+      e.id === exId ? { ...e, name, sets: sets.length > 0 ? sets : e.sets } : e
+    ))
   }
 
   const duplicateExercise = (exId: string) =>
@@ -407,9 +497,29 @@ export function LogWorkout() {
           </div>
         )}
 
-        {/* ── Gym: session type + muscles ───────────────────────────────── */}
+        {/* ── Gym: A/B suggestion + session type + muscles ─────────────── */}
         {type === 'gym' && (
           <div className={sectionCls}>
+            {/* A/B rotation suggestion */}
+            {nextSession && (
+              <div className="flex items-center justify-between bg-indigo-600/10 border border-indigo-500/20 rounded-lg px-3 py-2.5">
+                <div className="text-xs">
+                  <span className="text-slate-400">Last session: </span>
+                  <span className="text-slate-300">
+                    {SESSION_TYPES.find(s => s === sessionType[0]) ?? 'Gym'} on {formatWeekDate(nextSession.date)}
+                  </span>
+                  <span className="text-slate-400"> → Next up: </span>
+                  <span className="text-white font-medium">{nextSession.label}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSessionType([nextSession.label])}
+                  className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-600/20 px-2 py-1 rounded transition-colors ml-3"
+                >
+                  <ArrowRight size={11} /> Use
+                </button>
+              </div>
+            )}
             <ChipGroup
               label="Session type"
               options={SESSION_TYPES as any}
@@ -439,26 +549,15 @@ export function LogWorkout() {
 
             {exercises.map((ex, exIdx) => (
               <div key={ex.id} className="bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden">
-                {/* Exercise header */}
+                {/* Exercise header with autocomplete picker */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/60">
                   <span className="text-xs text-slate-500 font-medium w-5">{exIdx + 1}</span>
-                  <input
+                  <ExercisePicker
                     value={ex.name}
-                    onChange={e => updateExerciseName(ex.id, e.target.value)}
-                    className="flex-1 bg-transparent text-sm font-medium text-white placeholder-slate-500 focus:outline-none"
-                    placeholder="Exercise name (e.g. Bench Press)"
+                    historyMap={historyMap}
+                    onChange={name => updateExerciseName(ex.id, name)}
+                    onPickFromHistory={(name, sets) => pickExercise(ex.id, name, sets)}
                   />
-                  {ex.name && historyMap[ex.name] && (
-                    <button
-                      type="button"
-                      onClick={() => copyLastSession(ex.id, ex.name)}
-                      title={`Copy last session (${formatWeekDate(historyMap[ex.name].date)})`}
-                      className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-600/10 hover:bg-indigo-600/20 px-2 py-1 rounded transition-colors"
-                    >
-                      <History size={11} />
-                      Copy last
-                    </button>
-                  )}
                   <button type="button" onClick={() => duplicateExercise(ex.id)}
                     title="Duplicate exercise"
                     className="text-slate-600 hover:text-slate-300 transition-colors p-1">
@@ -472,17 +571,14 @@ export function LogWorkout() {
                   )}
                 </div>
 
-                {/* Previous session hint */}
+                {/* Previous session inline (shown when name is set and matches history) */}
                 {ex.name && historyMap[ex.name] && (
                   <div className="px-4 py-1.5 bg-slate-900/40 flex items-center gap-2 text-xs text-slate-500">
                     <History size={10} />
                     <span>
                       Last ({formatWeekDate(historyMap[ex.name].date)}):&nbsp;
                       {historyMap[ex.name].sets.slice(0, 4).map((s, i) => (
-                        <span key={i}>
-                          {i > 0 && ' · '}
-                          {s.reps}×{s.weight_kg}kg
-                        </span>
+                        <span key={i}>{i > 0 && ' · '}{s.reps}×{s.weight_kg}kg</span>
                       ))}
                       {historyMap[ex.name].sets.length > 4 && ' …'}
                     </span>
