@@ -428,7 +428,7 @@ def test_ai_coaching(client: httpx.Client, token: str) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     # Coaching query
-    info("Sending coaching query to Claude…")
+    info("Sending coaching query to AI")
     r = client.post("/agent/coaching-query", headers=headers, json={
         "query": "I just did a 10 km run and a push session this week. "
                  "How should I balance my training this week to avoid overtraining?",
