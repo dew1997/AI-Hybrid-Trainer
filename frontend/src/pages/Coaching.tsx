@@ -31,10 +31,9 @@ export function Coaching() {
 
   const mutation = useMutation({
     mutationFn: (query: string) => agentApi.coachingQuery(query).then(r => r.data),
-    onSuccess: (data, query) => {
+    onSuccess: (data) => {
       setMessages(prev => [
         ...prev,
-        { role: 'user', content: query },
         {
           role: 'assistant',
           content: data.answer,
@@ -129,7 +128,7 @@ export function Coaching() {
                       <span className="w-4 h-4 rounded-full bg-indigo-600/40 text-indigo-300 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
                         {j + 1}
                       </span>
-                      <p className="text-xs text-indigo-200">{a}</p>
+                      <p className="text-xs text-indigo-200">{a.replace(/^Action\s*(?:item\s*)?:\s*/i, '')}</p>
                     </div>
                   ))}
                 </div>
