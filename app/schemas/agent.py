@@ -70,11 +70,10 @@ class WeekPlan(BaseModel):
 
 
 class GeneratePlanRequest(BaseModel):
-    goal: str = Field(min_length=10, max_length=500)
-    weeks: int = Field(default=4, ge=2, le=16)
+    goal: str = Field(min_length=2, max_length=100)
+    weeks: int = Field(default=8, ge=2, le=24)
+    training_days_per_week: int = Field(default=4, ge=2, le=6)
     start_date: date | None = None
-    weekly_hours: float | None = Field(default=None, ge=1, le=20)
-    constraints: list[str] = []
 
 
 class PlanItemOut(BaseModel):

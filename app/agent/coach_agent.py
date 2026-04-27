@@ -309,10 +309,11 @@ async def run_generate_plan(
     from app.agent.tools import _get_recent_workouts, _get_user_stats
 
     stats = await _get_user_stats({"weeks_back": 8}, str(user.id), db)
-    await _get_recent_workouts({"days_back": 56, "workout_type": "all"}, str(user.id), db)
+    recent = await _get_recent_workouts({"days_back": 56, "workout_type": "all"}, str(user.id), db)
+    workout_summary = _summarise_workouts(recent.get("workouts", []))
 
     rag_chunks = await hybrid_search(
-        query=f"training plan periodization {request.goal}",
+        query=f"training plan periodization {request.goal} race preparation",
         db=db,
         user_id=str(user.id),
         top_k=6,
@@ -340,10 +341,10 @@ async def run_generate_plan(
         tsb=fitness.get("tsb") or "not enough data",
         run_km=vol.get("avg_run_km_per_week", 0),
         gym_sessions=vol.get("avg_gym_sessions_per_week", 0),
+        workout_history_summary=workout_summary,
         goal=request.goal,
         weeks=request.weeks,
-        weekly_hours=request.weekly_hours or "flexible",
-        constraints=", ".join(request.constraints) or "none",
+        training_days_per_week=request.training_days_per_week,
         rag_context=rag_context,
     )
 
