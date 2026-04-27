@@ -16,6 +16,7 @@ export const workoutsApi = {
     elevation_gain_m?: number
     perceived_effort?: number
     route_name?: string
+    notes?: string
   }) => api.post<{ workout: Workout; pipeline_status: string }>('/workouts', {
     workout_type: 'run',
     ...data,
@@ -27,6 +28,7 @@ export const workoutsApi = {
     workout_template?: string
     muscle_groups?: string[]
     perceived_effort?: number
+    notes?: string
     sets: { set_number: number; exercise_name: string; reps?: number; weight_kg?: number; is_warmup?: boolean }[]
   }) => api.post<{ workout: Workout; pipeline_status: string }>('/workouts', {
     workout_type: 'gym',
