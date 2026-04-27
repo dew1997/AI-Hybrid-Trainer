@@ -108,4 +108,26 @@ export interface CoachingResponse {
   sources: { title: string; relevance: number }[]
   suggested_actions: string[]
   token_usage: { input: number; output: number }
+  session_id: string
+}
+
+export interface CoachingSession {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count: number
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  sources: { title: string; relevance: number }[]
+  actions: string[]
+  created_at: string
+}
+
+export interface CoachingSessionDetail extends CoachingSession {
+  messages: ChatMessage[]
 }
