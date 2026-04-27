@@ -1,10 +1,10 @@
-import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { workoutsApi } from '../api/workouts'
 import { Badge } from './Badge'
 import { Spinner } from './Spinner'
 import { formatPace, formatDistance, formatDuration, formatDate, paceZoneColor } from '../lib/utils'
-import { X, Heart, Zap } from 'lucide-react'
+import { X, Heart, Zap, Trash2 } from 'lucide-react'
 
 interface Props {
   id: string
@@ -21,9 +21,22 @@ function MetricCell({ label, value }: { label: string; value: string }) {
 }
 
 export function WorkoutDetail({ id, onClose }: Props) {
+  const qc = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
   const { data: workout, isLoading } = useQuery({
     queryKey: ['workout', id],
     queryFn: () => workoutsApi.get(id).then(r => r.data),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => workoutsApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workouts'] })
+      qc.invalidateQueries({ queryKey: ['workouts-calendar'] })
+      qc.invalidateQueries({ queryKey: ['analytics-summary'] })
+      onClose()
+    },
   })
 
   useEffect(() => {
@@ -203,6 +216,35 @@ export function WorkoutDetail({ id, onClose }: Props) {
                 <p className="text-sm text-slate-300 leading-relaxed">{workout.notes}</p>
               </div>
             )}
+
+            {/* Delete */}
+            <div className="pt-2 border-t border-slate-800">
+              {!confirmDelete ? (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="flex items-center gap-2 text-sm text-slate-500 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 size={14} /> Delete workout
+                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-slate-400">Delete this workout permanently?</span>
+                  <button
+                    onClick={() => deleteMutation.mutate()}
+                    disabled={deleteMutation.isPending}
+                    className="text-sm font-medium text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 border border-red-400/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deleteMutation.isPending ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-sm text-slate-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

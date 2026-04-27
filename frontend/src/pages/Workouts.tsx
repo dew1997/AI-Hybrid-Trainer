@@ -1,19 +1,19 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { workoutsApi } from '../api/workouts'
 import { Badge } from '../components/Badge'
 import { Spinner } from '../components/Spinner'
 import { WorkoutDetail } from '../components/WorkoutDetail'
 import { formatPace, formatDistance, formatDuration, formatDate, paceZoneColor } from '../lib/utils'
-import { Plus, Heart, Zap, TrendingUp, Calendar, List, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Heart, Zap, TrendingUp, Calendar, List, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import type { Workout } from '../types'
 
 const PAGE_SIZE = 20
 
 // ── Workout card ──────────────────────────────────────────────────────────────
 
-function WorkoutRow({ w, onClick, hasPR }: { w: Workout; onClick: () => void; hasPR?: boolean }) {
+function WorkoutRow({ w, onClick, hasPR, onDelete }: { w: Workout; onClick: () => void; hasPR?: boolean; onDelete: (id: string) => void }) {
   const isRun = w.workout_type === 'run'
   const workingSets = w.sets?.filter(s => !s.is_warmup) ?? []
   const exerciseCount = new Set(w.sets?.map(s => s.exercise_name) ?? []).size
@@ -21,7 +21,7 @@ function WorkoutRow({ w, onClick, hasPR }: { w: Workout; onClick: () => void; ha
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-slate-800/40 border border-slate-700/60 rounded-xl p-4 hover:border-indigo-500/40 hover:bg-slate-800/70 transition-colors"
+      className="group w-full text-left bg-slate-800/40 border border-slate-700/60 rounded-xl p-4 hover:border-indigo-500/40 hover:bg-slate-800/70 transition-colors"
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -53,7 +53,17 @@ function WorkoutRow({ w, onClick, hasPR }: { w: Workout; onClick: () => void; ha
             <p className="text-xs text-slate-500 mt-0.5">{formatDate(w.started_at)}</p>
           </div>
         </div>
-        <Badge variant={w.status as any}>{w.status}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={w.status as any}>{w.status}</Badge>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onDelete(w.id) }}
+            className="opacity-0 group-hover:opacity-100 p-1 text-slate-600 hover:text-red-400 transition-all rounded"
+            title="Delete workout"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
 
       {/* Metrics grid */}
@@ -234,6 +244,7 @@ function WorkoutCalendar({
 // ── Main Workouts page ────────────────────────────────────────────────────────
 
 export function Workouts() {
+  const qc = useQueryClient()
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -241,6 +252,17 @@ export function Workouts() {
   const [accumulated, setAccumulated] = useState<Workout[]>([])
   const [cursor, setCursor] = useState<string | undefined>(undefined)
   const prevFilter = useRef(typeFilter)
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => workoutsApi.delete(id),
+    onSuccess: (_, id) => {
+      setAccumulated(prev => prev.filter(w => w.id !== id))
+      if (selectedId === id) setSelectedId(null)
+      qc.invalidateQueries({ queryKey: ['workouts'] })
+      qc.invalidateQueries({ queryKey: ['workouts-calendar'] })
+      qc.invalidateQueries({ queryKey: ['analytics-summary'] })
+    },
+  })
 
   // PR map for badge detection
   const [prMap, setPrMap] = useState<Record<string, number>>({})
@@ -395,7 +417,7 @@ export function Workouts() {
               </p>
               <div className="grid gap-3">
                 {dayWorkouts.map(w => (
-                  <WorkoutRow key={w.id} w={w} onClick={() => setSelectedId(w.id)} hasPR={hasPR(w)} />
+                  <WorkoutRow key={w.id} w={w} onClick={() => setSelectedId(w.id)} hasPR={hasPR(w)} onDelete={id => deleteMutation.mutate(id)} />
                 ))}
               </div>
             </div>
@@ -419,7 +441,7 @@ export function Workouts() {
             <>
               <div className="grid gap-3">
                 {accumulated.map(w => (
-                  <WorkoutRow key={w.id} w={w} onClick={() => setSelectedId(w.id)} hasPR={hasPR(w)} />
+                  <WorkoutRow key={w.id} w={w} onClick={() => setSelectedId(w.id)} hasPR={hasPR(w)} onDelete={id => deleteMutation.mutate(id)} />
                 ))}
               </div>
 

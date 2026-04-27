@@ -22,6 +22,8 @@ export const workoutsApi = {
     ...data,
   }),
 
+  delete: (id: string) => api.delete(`/workouts/${id}`),
+
   exerciseHistory: () =>
     api.get<{ exercise_name: string; date: string; sets: { reps: number | null; weight_kg: number | null }[] }[]>('/workouts/exercises/history'),
 
