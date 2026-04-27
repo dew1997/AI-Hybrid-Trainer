@@ -11,6 +11,9 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.workout import Workout
 from app.schemas.workout import (
+    ExerciseHistoryItem,
+    ExercisePR,
+    ExerciseSetSummary,
     PaginationMeta,
     WorkoutCreateRequest,
     WorkoutListResponse,
@@ -90,6 +93,98 @@ async def list_workouts(
         data=[WorkoutOut.model_validate(w) for w in workouts],
         meta=PaginationMeta(total=total, limit=limit, next_cursor=next_cursor, has_more=has_more),
     )
+
+
+@router.get("/exercises/history", response_model=list[ExerciseHistoryItem])
+async def exercise_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the most recent session's sets for every exercise the user has logged."""
+    from sqlalchemy import text
+
+
+    # Rank each set by the workout's started_at within its exercise_name group.
+    # Return only rank-1 rows (most recent session per exercise).
+    raw = await db.execute(
+        text("""
+            SELECT ws.exercise_name,
+                   w.started_at::date AS session_date,
+                   ws.reps,
+                   ws.weight_kg
+            FROM workout_sets ws
+            JOIN workouts w ON ws.workout_id = w.id
+            WHERE w.user_id = :user_id
+              AND w.status = 'processed'
+              AND ws.is_warmup = FALSE
+              AND ws.weight_kg IS NOT NULL
+              AND ws.reps IS NOT NULL
+            ORDER BY ws.exercise_name, w.started_at DESC
+        """),
+        {"user_id": str(current_user.id)},
+    )
+    rows = raw.fetchall()
+
+    # Group by exercise_name, keep only the first (most recent) date per exercise
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        name = row.exercise_name
+        if name not in grouped:
+            grouped[name] = {"exercise_name": name, "date": row.session_date.isoformat(), "sets": []}
+        # Only include sets from the same session date
+        if row.session_date.isoformat() == grouped[name]["date"]:
+            grouped[name]["sets"].append(
+                ExerciseSetSummary(reps=row.reps, weight_kg=float(row.weight_kg))
+            )
+
+    return [ExerciseHistoryItem(**v) for v in grouped.values()]
+
+
+@router.get("/exercises/prs", response_model=list[ExercisePR])
+async def exercise_prs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the all-time personal best estimated 1RM per exercise."""
+    from sqlalchemy import text
+
+    raw = await db.execute(
+        text("""
+            SELECT ws.exercise_name,
+                   ws.reps,
+                   ws.weight_kg,
+                   w.started_at::date AS session_date
+            FROM workout_sets ws
+            JOIN workouts w ON ws.workout_id = w.id
+            WHERE w.user_id = :user_id
+              AND w.status = 'processed'
+              AND ws.is_warmup = FALSE
+              AND ws.weight_kg IS NOT NULL
+              AND ws.weight_kg > 0
+              AND ws.reps IS NOT NULL
+              AND ws.reps > 0
+        """),
+        {"user_id": str(current_user.id)},
+    )
+    rows = raw.fetchall()
+
+    from app.pipeline.metrics import estimate_1rm
+
+    # Compute 1RM for every set, keep the max per exercise
+    best: dict[str, dict] = {}
+    for row in rows:
+        e1rm = estimate_1rm(float(row.weight_kg), int(row.reps))
+        name = row.exercise_name
+        if name not in best or e1rm > best[name]["estimated_1rm"]:
+            best[name] = {
+                "exercise_name": name,
+                "weight_kg": float(row.weight_kg),
+                "reps": int(row.reps),
+                "estimated_1rm": round(e1rm, 2),
+                "date": row.session_date.isoformat(),
+            }
+
+    return [ExercisePR(**v) for v in best.values()]
 
 
 @router.get("/{workout_id}", response_model=WorkoutOut)

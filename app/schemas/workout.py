@@ -105,10 +105,30 @@ class WorkoutOut(BaseModel):
     # Gym
     total_volume_kg: float | None
     muscle_groups: list[str] | None
+    workout_template: str | None
     splits: list[RunSplitOut] = []
     sets: list[WorkoutSetOut] = []
 
     model_config = {"from_attributes": True}
+
+
+class ExerciseSetSummary(BaseModel):
+    reps: int | None
+    weight_kg: float | None
+
+
+class ExerciseHistoryItem(BaseModel):
+    exercise_name: str
+    date: str
+    sets: list[ExerciseSetSummary]
+
+
+class ExercisePR(BaseModel):
+    exercise_name: str
+    weight_kg: float
+    reps: int
+    estimated_1rm: float
+    date: str
 
 
 class PaginationMeta(BaseModel):
