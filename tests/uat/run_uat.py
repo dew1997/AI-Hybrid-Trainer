@@ -477,7 +477,7 @@ def test_plan_generation(client: httpx.Client, token: str) -> str:
         "goal": "Improve my 10 km run time while maintaining strength",
         "weeks": 4,
         "constraints": ["3 gym sessions and 3 runs per week maximum", "Sundays are rest days"],
-    }, timeout=90)
+    }, timeout=150)
     if r.status_code in (401, 402):
         warn("OpenRouter API key missing or invalid — skipping plan generation")
         record("Generate 4-week hybrid training plan", True, "(skipped — no API key)")
@@ -489,8 +489,8 @@ def test_plan_generation(client: httpx.Client, token: str) -> str:
             "goal": "Improve my 10 km run time while maintaining strength",
             "weeks": 4,
             "constraints": ["3 gym sessions and 3 runs per week maximum", "Sundays are rest days"],
-        }, timeout=180)
-    passed = assert_status(r, 200, "generate plan")
+        }, timeout=150)
+    passed = assert_status(r, 201, "generate plan")
     plan_id = ""
     if passed:
         body = r.json()

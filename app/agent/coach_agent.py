@@ -87,7 +87,7 @@ async def _run_agent_loop(
         try:
             response = await client.chat.completions.create(
                 model=settings.openrouter_model,
-                max_tokens=2048,
+                max_tokens=8192,
                 extra_headers=_OR_HEADERS,
                 tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
                 messages=messages,  # type: ignore[arg-type]
@@ -99,7 +99,7 @@ async def _run_agent_loop(
             try:
                 response = await client.chat.completions.create(
                     model=settings.openrouter_model,
-                    max_tokens=2048,
+                    max_tokens=8192,
                     extra_headers=_OR_HEADERS,
                     tools=TOOL_DEFINITIONS,  # type: ignore[arg-type]
                     messages=messages,  # type: ignore[arg-type]
@@ -157,7 +157,13 @@ async def _run_agent_loop(
 
             # Execute each tool and append results
             for tc in choice.message.tool_calls:
-                tool_input = json.loads(tc.function.arguments)
+                try:
+                    tool_input = json.loads(tc.function.arguments)
+                except json.JSONDecodeError:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="AI response was truncated mid-tool-call. Try a shorter request or fewer plan weeks.",
+                    )
                 logger.info(
                     "agent_tool_call",
                     tool=tc.function.name,

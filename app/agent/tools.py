@@ -105,22 +105,23 @@ TOOL_DEFINITIONS = [
                             "properties": {
                                 "week_number": {"type": "integer"},
                                 "theme": {"type": "string"},
-                                "target_tss": {"type": "number"},
                                 "sessions": {
                                     "type": "array",
                                     "items": {
                                         "type": "object",
                                         "properties": {
                                             "day_of_week": {"type": "integer", "minimum": 1, "maximum": 7},
-                                            "session_type": {"type": "string"},
+                                            "session_type": {
+                                                "type": "string",
+                                                "enum": ["easy_run", "tempo_run", "interval_run", "long_run", "strength", "mobility", "rest", "cross_training"],
+                                            },
                                             "title": {"type": "string"},
-                                            "description": {"type": "string"},
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Include target pace/HR/exercises inline as plain text to keep JSON compact",
+                                            },
                                             "duration_min": {"type": "integer"},
-                                            "target_distance_km": {"type": "number"},
-                                            "target_pace_min_per_km": {"type": "number"},
-                                            "target_hr_zone": {"type": "integer"},
                                             "target_rpe": {"type": "integer"},
-                                            "exercises": {"type": "array"},
                                         },
                                         "required": ["day_of_week", "session_type", "title"],
                                     },
@@ -272,6 +273,44 @@ async def _get_recent_workouts(inputs: dict, user_id: str, db: AsyncSession) -> 
     }
 
 
+_SESSION_TYPE_MAP = {
+    "run": "easy_run",
+    "gym": "strength",
+    "strength_training": "strength",
+    "weights": "strength",
+    "lifting": "strength",
+    "cross_train": "cross_training",
+    "tempo": "tempo_run",
+    "interval": "interval_run",
+    "intervals": "interval_run",
+    "long": "long_run",
+    "recovery": "easy_run",
+    "stretch": "mobility",
+    "yoga": "mobility",
+}
+_VALID_SESSION_TYPES = {"easy_run", "tempo_run", "interval_run", "long_run", "strength", "mobility", "rest", "cross_training"}
+
+
+def _coerce_session_type(v: str) -> str:
+    if v in _VALID_SESSION_TYPES:
+        return v
+    return _SESSION_TYPE_MAP.get(v.lower(), "easy_run")
+
+
+def _to_float(v) -> float | None:
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(v) -> int | None:
+    try:
+        return int(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 async def _create_training_plan(
     inputs: dict,
     user_id: str,
@@ -301,14 +340,14 @@ async def _create_training_plan(
                 plan_id=plan.id,
                 week_number=week["week_number"],
                 day_of_week=session["day_of_week"],
-                session_type=session["session_type"],
+                session_type=_coerce_session_type(session["session_type"]),
                 title=session["title"],
                 description=session.get("description"),
-                duration_min=session.get("duration_min"),
-                target_distance_km=session.get("target_distance_km"),
-                target_pace_min_per_km=session.get("target_pace_min_per_km"),
-                target_hr_zone=session.get("target_hr_zone"),
-                target_rpe=session.get("target_rpe"),
+                duration_min=_to_int(session.get("duration_min")),
+                target_distance_km=_to_float(session.get("target_distance_km")),
+                target_pace_min_per_km=_to_float(session.get("target_pace_min_per_km")),
+                target_hr_zone=_to_int(session.get("target_hr_zone")),
+                target_rpe=_to_int(session.get("target_rpe")),
                 exercises=session.get("exercises", []),
             )
             db.add(item)
