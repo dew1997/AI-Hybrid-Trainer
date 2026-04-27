@@ -34,6 +34,19 @@ _client: AsyncOpenAI | None = None
 MAX_AGENT_TURNS = 6
 
 
+def _raise_for_api_status(exc: "APIStatusError") -> None:
+    """Convert OpenRouter API error codes to descriptive HTTPExceptions."""
+    if exc.status_code == 402:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                "OpenRouter spending limit reached. "
+                "Check your API key's spend limit at openrouter.ai/settings/keys."
+            ),
+        )
+    raise HTTPException(status_code=503, detail=f"AI service unavailable: {exc.status_code}")
+
+
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
@@ -87,6 +100,13 @@ async def _run_agent_loop(
                     status_code=429,
                     detail="AI rate limit hit. Please wait a minute and try again.",
                 )
+            except AuthenticationError:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid OpenRouter API key. Check OPENROUTER_API_KEY in your .env.",
+                )
+            except APIStatusError as e:
+                _raise_for_api_status(e)
         except AuthenticationError:
             raise HTTPException(
                 status_code=401,
@@ -95,7 +115,7 @@ async def _run_agent_loop(
         except BadRequestError as e:
             raise HTTPException(status_code=400, detail=f"AI request invalid: {e}")
         except APIStatusError as e:
-            raise HTTPException(status_code=503, detail=f"AI service unavailable: {e.status_code}")
+            _raise_for_api_status(e)
 
         choice = response.choices[0]
         if response.usage:
