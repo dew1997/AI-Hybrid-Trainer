@@ -43,6 +43,25 @@ export function paceZoneColor(zone: string | null): string {
   return zone ? (map[zone] ?? 'text-slate-400') : 'text-slate-400'
 }
 
+export function formatDurationShort(minutes: number | null): string {
+  if (!minutes) return '—'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
+}
+
+export function formatWeekDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+export function formatVolume(kg: number | null): string {
+  if (!kg) return '—'
+  const rounded = Math.round(Number(kg))
+  return rounded >= 1000
+    ? `${(rounded / 1000).toFixed(1)} t`
+    : `${rounded.toLocaleString()} kg`
+}
+
 export function tsbColor(tsb: number | null): string {
   if (tsb === null) return 'text-slate-400'
   if (tsb > 10) return 'text-green-400'

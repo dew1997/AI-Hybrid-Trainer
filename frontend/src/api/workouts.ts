@@ -22,6 +22,12 @@ export const workoutsApi = {
     ...data,
   }),
 
+  exerciseHistory: () =>
+    api.get<{ exercise_name: string; date: string; sets: { reps: number | null; weight_kg: number | null }[] }[]>('/workouts/exercises/history'),
+
+  exercisePRs: () =>
+    api.get<{ exercise_name: string; weight_kg: number; reps: number; estimated_1rm: number; date: string }[]>('/workouts/exercises/prs'),
+
   createGym: (data: {
     started_at: string
     duration_seconds: number

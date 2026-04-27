@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { workoutsApi } from '../api/workouts'
 import { useToast } from '../hooks/useToast'
-import { CheckCircle, Plus, Trash2, Copy } from 'lucide-react'
+import { CheckCircle, Plus, Trash2, Copy, History } from 'lucide-react'
+import { formatWeekDate } from '../lib/utils'
 
 // ── types ──────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,23 @@ export function LogWorkout() {
   const [muscles, setMuscles] = useState<string[]>([])
   const [exercises, setExercises] = useState<Exercise[]>([makeExercise()])
 
+  // Exercise history + PR maps (fetched once on mount)
+  const [historyMap, setHistoryMap] = useState<Record<string, { date: string; sets: { reps: number | null; weight_kg: number | null }[] }>>({})
+  const [prMap, setPrMap] = useState<Record<string, { estimated_1rm: number; weight_kg: number; reps: number }>>({})
+
+  useEffect(() => {
+    workoutsApi.exerciseHistory().then(r => {
+      const map: typeof historyMap = {}
+      for (const item of r.data) map[item.exercise_name] = { date: item.date, sets: item.sets }
+      setHistoryMap(map)
+    }).catch(() => {})
+    workoutsApi.exercisePRs().then(r => {
+      const map: typeof prMap = {}
+      for (const pr of r.data) map[pr.exercise_name] = { estimated_1rm: pr.estimated_1rm, weight_kg: pr.weight_kg, reps: pr.reps }
+      setPrMap(map)
+    }).catch(() => {})
+  }, [])
+
   // ── exercise helpers ─────────────────────────────────────────────────────
 
   const updateExerciseName = (exId: string, name: string) =>
@@ -182,6 +200,21 @@ export function LogWorkout() {
 
   const removeExercise = (exId: string) =>
     setExercises(prev => prev.filter(e => e.id !== exId))
+
+  const copyLastSession = (exId: string, exName: string) => {
+    const history = historyMap[exName]
+    if (!history) return
+    setExercises(prev => prev.map(e => {
+      if (e.id !== exId) return e
+      const newSets = history.sets.map(s => ({
+        id: Math.random().toString(36).slice(2),
+        reps: s.reps?.toString() ?? '',
+        weight_kg: s.weight_kg?.toString() ?? '',
+        is_warmup: false,
+      }))
+      return { ...e, sets: newSets.length > 0 ? newSets : e.sets }
+    }))
+  }
 
   const duplicateExercise = (exId: string) =>
     setExercises(prev => {
@@ -247,6 +280,28 @@ export function LogWorkout() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workouts'] })
       qc.invalidateQueries({ queryKey: ['analytics-summary'] })
+
+      // PR detection for gym workouts
+      if (type === 'gym') {
+        const newPrs: string[] = []
+        for (const ex of exercises.filter(e => e.name)) {
+          const workingSets = ex.sets.filter(s => !s.is_warmup && s.weight_kg && s.reps)
+          for (const s of workingSets) {
+            const w = +s.weight_kg, r = +s.reps
+            if (w > 0 && r > 0) {
+              const e1rm = r === 1 ? w : w * (1 + r / 30)
+              const existing = prMap[ex.name]?.estimated_1rm ?? 0
+              if (e1rm > existing + 0.1) {
+                newPrs.push(`${ex.name}: ${e1rm.toFixed(1)} kg est. 1RM`)
+              }
+            }
+          }
+        }
+        if (newPrs.length > 0) {
+          newPrs.forEach(pr => toast('success', `🏆 New PR! ${pr}`))
+        }
+      }
+
       toast('success', 'Workout logged!')
       setSuccess(true)
       setTimeout(() => navigate('/workouts'), 2000)
@@ -393,6 +448,17 @@ export function LogWorkout() {
                     className="flex-1 bg-transparent text-sm font-medium text-white placeholder-slate-500 focus:outline-none"
                     placeholder="Exercise name (e.g. Bench Press)"
                   />
+                  {ex.name && historyMap[ex.name] && (
+                    <button
+                      type="button"
+                      onClick={() => copyLastSession(ex.id, ex.name)}
+                      title={`Copy last session (${formatWeekDate(historyMap[ex.name].date)})`}
+                      className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-600/10 hover:bg-indigo-600/20 px-2 py-1 rounded transition-colors"
+                    >
+                      <History size={11} />
+                      Copy last
+                    </button>
+                  )}
                   <button type="button" onClick={() => duplicateExercise(ex.id)}
                     title="Duplicate exercise"
                     className="text-slate-600 hover:text-slate-300 transition-colors p-1">
@@ -405,6 +471,23 @@ export function LogWorkout() {
                     </button>
                   )}
                 </div>
+
+                {/* Previous session hint */}
+                {ex.name && historyMap[ex.name] && (
+                  <div className="px-4 py-1.5 bg-slate-900/40 flex items-center gap-2 text-xs text-slate-500">
+                    <History size={10} />
+                    <span>
+                      Last ({formatWeekDate(historyMap[ex.name].date)}):&nbsp;
+                      {historyMap[ex.name].sets.slice(0, 4).map((s, i) => (
+                        <span key={i}>
+                          {i > 0 && ' · '}
+                          {s.reps}×{s.weight_kg}kg
+                        </span>
+                      ))}
+                      {historyMap[ex.name].sets.length > 4 && ' …'}
+                    </span>
+                  </div>
+                )}
 
                 {/* Set rows */}
                 <div className="px-4 py-2 space-y-1.5">
