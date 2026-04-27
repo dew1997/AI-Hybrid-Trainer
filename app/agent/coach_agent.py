@@ -102,14 +102,14 @@ async def _run_agent_loop(
                 )
             except AuthenticationError:
                 raise HTTPException(
-                    status_code=401,
+                    status_code=503,
                     detail="Invalid OpenRouter API key. Check OPENROUTER_API_KEY in your .env.",
                 )
             except APIStatusError as e:
                 _raise_for_api_status(e)
         except AuthenticationError:
             raise HTTPException(
-                status_code=401,
+                status_code=503,
                 detail="Invalid OpenRouter API key. Check OPENROUTER_API_KEY in your .env.",
             )
         except BadRequestError as e:

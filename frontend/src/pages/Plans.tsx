@@ -146,7 +146,13 @@ export function Plans() {
       toast('success', 'Training plan generated!')
     },
     onError: (err: any) => {
-      setGenError(err.response?.data?.detail || 'Plan generation failed')
+      const detail = err.response?.data?.detail
+      const msg = Array.isArray(detail)
+        ? detail.map((e: any) => e.msg).join('. ')
+        : typeof detail === 'string'
+          ? detail
+          : 'Plan generation failed'
+      setGenError(msg)
       toast('error', 'Failed to generate plan')
     },
   })

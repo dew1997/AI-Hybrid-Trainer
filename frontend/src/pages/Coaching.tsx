@@ -43,11 +43,15 @@ export function Coaching() {
         },
       ])
     },
-    onError: () => {
-      toast('error', 'Coach query failed — please try again')
+    onError: (err: any) => {
+      const detail = err.response?.data?.detail
+      const msg = typeof detail === 'string'
+        ? detail
+        : 'Coach query failed — please try again'
+      toast('error', msg)
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' },
+        { role: 'assistant', content: `Error: ${msg}` },
       ])
     },
   })
