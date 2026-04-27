@@ -46,8 +46,8 @@ async def analytics_summary(
 
     trend = None
     if len(trailing) >= 2:
-        recent_tss = trailing[0].weekly_tss or 0
-        older_tss = trailing[1].weekly_tss or 0
+        recent_tss = float(trailing[0].weekly_tss or 0)
+        older_tss = float(trailing[1].weekly_tss or 0)
         if recent_tss > older_tss * 1.1:
             trend = "increasing"
         elif recent_tss < older_tss * 0.9:
