@@ -319,7 +319,7 @@ async def run_generate_plan(
         query=f"training plan periodization {request.goal} race preparation",
         db=db,
         user_id=str(user.id),
-        top_k=6,
+        top_k=3,  # fewer chunks → more output token budget for the plan JSON
     )
     rag_context = build_rag_context(rag_chunks)
 

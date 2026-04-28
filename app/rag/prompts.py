@@ -72,5 +72,10 @@ Design a {weeks}-week training plan tailored to this athlete's actual fitness da
 4. Include progressive overload with a deload week every 3-4 weeks
 5. For race-goal-specific sessions: target the appropriate race pace derived from the athlete's threshold pace and VO2max
 
-Use the create_training_plan tool to save the plan. The plan must include an explanation \
-field summarising the periodization rationale and key focus of each week."""
+CRITICAL OUTPUT CONSTRAINT: The entire plan must fit in one tool call.
+- Each session "title" ≤ 6 words (e.g. "Easy 8km zone 2")
+- Each session "description" ≤ 12 words (e.g. "Zone 2, conversational pace, HR 130-145.")
+- Do NOT write paragraphs. One short phrase per field.
+- The "explanation" field ≤ 60 words total for the whole plan.
+
+Use the create_training_plan tool to save the plan."""

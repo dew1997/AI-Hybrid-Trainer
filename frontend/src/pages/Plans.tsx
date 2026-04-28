@@ -288,7 +288,7 @@ export function Plans() {
               Cancel
             </button>
             {generateMutation.isPending && (
-              <p className="text-xs text-slate-500">AI is designing your plan — ~30 seconds…</p>
+              <p className="text-xs text-slate-500">AI is designing your plan — this can take 1–3 minutes for longer plans…</p>
             )}
           </div>
         </div>

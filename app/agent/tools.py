@@ -100,11 +100,11 @@ TOOL_DEFINITIONS = [
                     },
                     "weeks": {
                         "type": "array",
+                        "description": "One object per week. CRITICAL: keep ALL description fields to ≤12 words each.",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "week_number": {"type": "integer"},
-                                "theme": {"type": "string"},
                                 "sessions": {
                                     "type": "array",
                                     "items": {
@@ -115,10 +115,10 @@ TOOL_DEFINITIONS = [
                                                 "type": "string",
                                                 "enum": ["easy_run", "tempo_run", "interval_run", "long_run", "strength", "mobility", "rest", "cross_training"],
                                             },
-                                            "title": {"type": "string"},
+                                            "title": {"type": "string", "description": "Max 6 words, e.g. 'Easy 8km zone 2'"},
                                             "description": {
                                                 "type": "string",
-                                                "description": "Include target pace/HR/exercises inline as plain text to keep JSON compact",
+                                                "description": "STRICT MAX 12 WORDS. Example: 'Zone 2, conversational pace, HR 130-145.' Do not elaborate.",
                                             },
                                             "duration_min": {"type": "integer"},
                                             "target_rpe": {"type": "integer"},
@@ -127,7 +127,7 @@ TOOL_DEFINITIONS = [
                                     },
                                 },
                             },
-                            "required": ["week_number", "theme", "sessions"],
+                            "required": ["week_number", "sessions"],
                         },
                     },
                 },
