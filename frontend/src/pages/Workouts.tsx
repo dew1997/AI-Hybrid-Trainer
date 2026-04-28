@@ -6,7 +6,7 @@ import { Badge } from '../components/Badge'
 import { Spinner } from '../components/Spinner'
 import { WorkoutDetail } from '../components/WorkoutDetail'
 import { formatPace, formatDistance, formatDuration, formatDate, paceZoneColor } from '../lib/utils'
-import { Plus, Heart, Zap, TrendingUp, Calendar, List, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { Plus, Heart, Zap, TrendingUp, Calendar, List, ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
 import type { Workout } from '../types'
 
 const PAGE_SIZE = 20
@@ -128,15 +128,16 @@ function WorkoutRow({ w, onClick, hasPR, onDelete }: { w: Workout; onClick: () =
 
 function WorkoutCalendar({
   dayMap,
-  onSelectDay,
+  onWorkoutClick,
 }: {
   dayMap: Record<string, Workout[]>
-  onSelectDay: (date: string) => void
+  onWorkoutClick: (id: string) => void
 }) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth()) // 0-indexed
   const [selected, setSelected] = useState<string | null>(null)
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
 
   const monthLabel = new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
@@ -166,14 +167,23 @@ function WorkoutCalendar({
   const fmt = (d: Date) => d.toISOString().slice(0, 10)
   const todayStr = fmt(today)
 
-  const handleClick = (d: Date) => {
+  const handleClick = (d: Date, e: React.MouseEvent<HTMLButtonElement>) => {
     const key = fmt(d)
+    if (selected === key) { setSelected(null); setPopoverPos(null); return }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const calRect = (e.currentTarget.closest('.calendar-grid') as HTMLElement)?.getBoundingClientRect()
+    if (calRect) {
+      const top = rect.bottom - calRect.top + 8
+      const left = Math.min(rect.left - calRect.left, calRect.width - 224)
+      setPopoverPos({ top, left: Math.max(0, left) })
+    }
     setSelected(key)
-    onSelectDay(key)
   }
 
+  const selectedWorkouts = selected ? (dayMap[selected] ?? []) : []
+
   return (
-    <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-4">
+    <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-4 relative calendar-grid">
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
@@ -206,7 +216,7 @@ function WorkoutCalendar({
           return (
             <button
               key={key}
-              onClick={() => handleClick(d)}
+              onClick={e => handleClick(d, e)}
               className={`aspect-square flex flex-col items-center justify-center rounded-lg transition-colors relative ${
                 isSelected ? 'bg-indigo-600/30 border border-indigo-500' :
                 isToday ? 'ring-2 ring-indigo-500 ring-inset bg-slate-800' :
@@ -237,6 +247,45 @@ function WorkoutCalendar({
           <span className="w-2 h-2 rounded-full bg-purple-400" /> Gym
         </div>
       </div>
+
+      {/* Day detail popover */}
+      {selected && popoverPos && selectedWorkouts.length > 0 && (
+        <div
+          className="absolute z-30 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl p-3 space-y-2"
+          style={{ top: popoverPos.top, left: popoverPos.left }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-slate-300">
+              {new Date(selected + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+            <button onClick={() => { setSelected(null); setPopoverPos(null) }} className="text-slate-500 hover:text-white">
+              <X size={13} />
+            </button>
+          </div>
+          {selectedWorkouts.map(w => (
+            <button
+              key={w.id}
+              onClick={() => { onWorkoutClick(w.id); setSelected(null); setPopoverPos(null) }}
+              className="w-full text-left flex items-center gap-2 hover:bg-slate-700 rounded-lg px-2 py-1.5 transition-colors"
+            >
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${w.workout_type === 'run' ? 'bg-blue-400' : 'bg-purple-400'}`} />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-white truncate">
+                  {w.workout_type === 'run'
+                    ? `Run ${w.distance_meters ? (w.distance_meters / 1000).toFixed(1) + ' km' : ''}`
+                    : (w.workout_template ?? 'Gym session')}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {w.duration_seconds ? `${Math.round(w.duration_seconds / 60)} min` : ''}
+                  {w.workout_type === 'run' && w.avg_pace_sec_per_km
+                    ? ` · ${Math.floor(w.avg_pace_sec_per_km / 60)}:${String(Math.round(w.avg_pace_sec_per_km % 60)).padStart(2, '0')}/km`
+                    : ''}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -248,7 +297,6 @@ export function Workouts() {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [accumulated, setAccumulated] = useState<Workout[]>([])
   const [cursor, setCursor] = useState<string | undefined>(undefined)
   const prevFilter = useRef(typeFilter)
@@ -335,8 +383,6 @@ export function Workouts() {
     return false
   }
 
-  const dayWorkouts = selectedDay ? (dayMap[selectedDay] ?? []) : []
-
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -400,29 +446,10 @@ export function Workouts() {
 
       {/* ── Calendar view ── */}
       {viewMode === 'calendar' && (
-        <div className="space-y-4">
-          <WorkoutCalendar
-            dayMap={dayMap}
-            onSelectDay={day => setSelectedDay(prev => prev === day ? null : day)}
-          />
-
-          {/* Selected day workouts */}
-          {selectedDay && (
-            <div>
-              <p className="text-xs text-slate-500 mb-2">
-                {dayWorkouts.length === 0
-                  ? `No workouts on ${selectedDay}`
-                  : `${dayWorkouts.length} workout${dayWorkouts.length > 1 ? 's' : ''} on ${new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`
-                }
-              </p>
-              <div className="grid gap-3">
-                {dayWorkouts.map(w => (
-                  <WorkoutRow key={w.id} w={w} onClick={() => setSelectedId(w.id)} hasPR={hasPR(w)} onDelete={id => deleteMutation.mutate(id)} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <WorkoutCalendar
+          dayMap={dayMap}
+          onWorkoutClick={id => setSelectedId(id)}
+        />
       )}
 
       {/* ── List view ── */}
