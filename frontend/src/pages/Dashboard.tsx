@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import ReactMarkdown from 'react-markdown'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
@@ -37,21 +38,34 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ── AI Daily Briefing ─────────────────────────────────────────────────────────
 
-const TODAY_KEY = `ai_briefing_${new Date().toISOString().slice(0, 10)}`
+const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY_KEY = `ai_briefing_${TODAY}`
+
+function pruneStaleBriefings() {
+  // Remove cached briefings from previous days to keep localStorage tidy
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('ai_briefing_') && key !== TODAY_KEY) {
+      localStorage.removeItem(key)
+    }
+  }
+}
 
 function AiBriefing() {
+  pruneStaleBriefings()
   const cached = localStorage.getItem(TODAY_KEY)
   const [briefing, setBriefing] = useState<string | null>(cached)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
 
-  const fetch = async () => {
+  const fetchBriefing = async () => {
     setLoading(true)
     setError(false)
     try {
       const res = await agentApi.coachingQuery(
-        'Give me a 2-sentence personalised training briefing for today based on my recent workouts. Be specific and actionable.',
-        4
+        'Give me a brief personalised training insight for today based on my recent workouts. Be specific and actionable in 2-3 sentences.',
+        4,
+        undefined,
+        false   // persist=false — don't save as a coaching session
       )
       const text = res.data.answer
       setBriefing(text)
@@ -70,10 +84,21 @@ function AiBriefing() {
           <Bot size={14} className="text-indigo-400" />
         </div>
         <span className="text-sm font-medium text-white">Today's training insight</span>
+        {briefing && <span className="text-xs text-slate-600 ml-auto">{TODAY}</span>}
       </div>
 
       {briefing ? (
-        <p className="text-sm text-slate-300 leading-relaxed">{briefing}</p>
+        <div className="text-sm text-slate-300 leading-relaxed prose-sm">
+          <ReactMarkdown components={{
+            p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+            strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+            em: ({ children }) => <em className="italic text-slate-300">{children}</em>,
+            ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mt-1">{children}</ul>,
+            li: ({ children }) => <li className="text-slate-300">{children}</li>,
+          }}>
+            {briefing}
+          </ReactMarkdown>
+        </div>
       ) : error ? (
         <p className="text-sm text-slate-500">Couldn't load insight — check your OpenRouter key or try again later.</p>
       ) : (
@@ -82,7 +107,7 @@ function AiBriefing() {
 
       {!briefing && (
         <button
-          onClick={fetch}
+          onClick={fetchBriefing}
           disabled={loading}
           className="mt-3 flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
         >

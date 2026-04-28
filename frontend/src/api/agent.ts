@@ -2,8 +2,8 @@ import { api } from './client'
 import type { CoachingResponse, CoachingSession, CoachingSessionDetail, TrainingPlan, TrainingPlanDetail } from '../types'
 
 export const agentApi = {
-  coachingQuery: (query: string, context_weeks = 4, session_id?: string) =>
-    api.post<CoachingResponse>('/agent/coaching-query', { query, context_weeks, session_id }),
+  coachingQuery: (query: string, context_weeks = 4, session_id?: string, persist = true) =>
+    api.post<CoachingResponse>('/agent/coaching-query', { query, context_weeks, session_id, persist }),
 
   generatePlan: (data: {
     goal: string

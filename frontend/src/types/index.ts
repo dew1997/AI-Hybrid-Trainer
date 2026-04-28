@@ -108,7 +108,7 @@ export interface CoachingResponse {
   sources: { title: string; relevance: number }[]
   suggested_actions: string[]
   token_usage: { input: number; output: number }
-  session_id: string
+  session_id: string | null
 }
 
 export interface CoachingSession {

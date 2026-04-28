@@ -8,6 +8,7 @@ class CoachingQueryRequest(BaseModel):
     query: str = Field(min_length=5, max_length=1000)
     context_weeks: int = Field(default=4, ge=1, le=12)
     session_id: uuid.UUID | None = None
+    persist: bool = True  # set False for ephemeral calls (e.g. dashboard briefing)
 
 
 class RetrievedSource(BaseModel):
@@ -21,7 +22,7 @@ class CoachingQueryResponse(BaseModel):
     sources: list[RetrievedSource]
     suggested_actions: list[str]
     token_usage: dict[str, int]
-    session_id: uuid.UUID
+    session_id: uuid.UUID | None
 
 
 class ChatMessageOut(BaseModel):
