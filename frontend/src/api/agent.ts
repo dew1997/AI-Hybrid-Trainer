@@ -15,7 +15,16 @@ export const agentApi = {
 
   getPlan: (id: string) => api.get<TrainingPlanDetail>(`/agent/plans/${id}`),
 
+  getActivePlan: () => api.get<TrainingPlanDetail>('/agent/plans/active'),
+
   activatePlan: (id: string) => api.patch(`/agent/plans/${id}/activate`),
+
+  toggleItemComplete: (itemId: string, workoutId?: string) =>
+    api.patch<{ id: string; is_completed: boolean }>(
+      `/agent/plans/items/${itemId}/complete`,
+      null,
+      { params: workoutId ? { workout_id: workoutId } : {} }
+    ),
 
   listSessions: () => api.get<CoachingSession[]>('/agent/sessions'),
 

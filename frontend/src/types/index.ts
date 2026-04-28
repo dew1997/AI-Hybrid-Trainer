@@ -83,6 +83,7 @@ export interface TrainingPlan {
   goal: string
   status: string
   duration_weeks: number
+  start_date: string | null
   ai_explanation: string | null
   created_at: string
 }
@@ -95,12 +96,14 @@ export interface PlanItem {
   id: string
   week_number: number
   day_of_week: number
+  actual_date: string | null   // ISO date computed from start_date + week/day offsets
   session_type: string
   title: string
   description: string | null
   duration_min: number | null
   target_distance_km: number | null
   is_completed: boolean
+  completed_workout_id: string | null
 }
 
 export interface CoachingResponse {

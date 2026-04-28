@@ -5,7 +5,7 @@ import { useToast } from '../hooks/useToast'
 import { Spinner } from '../components/Spinner'
 import { Badge } from '../components/Badge'
 import { formatDate } from '../lib/utils'
-import { Sparkles, ChevronDown, ChevronRight, CheckCircle2, Circle, Zap } from 'lucide-react'
+import { Sparkles, ChevronDown, ChevronRight, CheckCircle2, Circle, Zap, RefreshCw } from 'lucide-react'
 import type { TrainingPlanDetail } from '../types'
 
 const SESSION_COLORS: Record<string, string> = {
@@ -21,8 +21,11 @@ const SESSION_COLORS: Record<string, string> = {
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-function PlanView({ plan }: { plan: TrainingPlanDetail }) {
-  const [openWeeks, setOpenWeeks] = useState<Set<number>>(new Set([1]))
+function PlanView({ plan, onToggleItem }: { plan: TrainingPlanDetail; onToggleItem?: (id: string) => void }) {
+  const today = new Date().toISOString().slice(0, 10)
+  // Auto-open the current week, or week 1 if no active plan
+  const currentWeek = plan.items.find(i => i.actual_date && i.actual_date >= today)?.week_number ?? 1
+  const [openWeeks, setOpenWeeks] = useState<Set<number>>(new Set([currentWeek]))
 
   const weeks = Array.from(new Set(plan.items.map(i => i.week_number))).sort()
 
@@ -67,38 +70,57 @@ function PlanView({ plan }: { plan: TrainingPlanDetail }) {
 
             {isOpen && (
               <div className="px-4 pb-4 space-y-2">
-                {sessions.map(item => (
-                  <div key={item.id} className="flex items-start gap-3">
-                    {item.is_completed
-                      ? <CheckCircle2 size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
-                      : <Circle size={16} className="text-slate-600 mt-0.5 flex-shrink-0" />
-                    }
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-slate-500 w-7">{DAYS[item.day_of_week - 1]}</span>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded border font-medium ${
-                            SESSION_COLORS[item.session_type] ?? 'bg-slate-700 text-slate-300 border-slate-600'
-                          }`}
-                        >
-                          {item.session_type.replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-sm text-slate-200">{item.title}</span>
-                      </div>
-                      {item.description && (
-                        <p className="text-xs text-slate-400 mt-1 ml-9">{item.description}</p>
-                      )}
-                      <div className="flex gap-3 mt-1 ml-9">
-                        {item.duration_min && (
-                          <span className="text-xs text-slate-500">{item.duration_min} min</span>
+                {sessions.map(item => {
+                  const isToday = item.actual_date === today
+                  const isPast = item.actual_date && item.actual_date < today
+                  return (
+                    <div key={item.id} className={`flex items-start gap-3 rounded-lg px-2 py-1.5 ${
+                      isToday ? 'bg-indigo-600/10 border border-indigo-500/20' : ''
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => onToggleItem?.(item.id)}
+                        disabled={!onToggleItem}
+                        className="mt-0.5 flex-shrink-0 disabled:cursor-default"
+                        title={item.is_completed ? 'Mark incomplete' : 'Mark complete'}
+                      >
+                        {item.is_completed
+                          ? <CheckCircle2 size={16} className="text-green-400" />
+                          : <Circle size={16} className={isPast ? 'text-red-400/60' : 'text-slate-600'} />
+                        }
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-slate-500 w-7">{DAYS[item.day_of_week - 1]}</span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded border font-medium ${
+                              SESSION_COLORS[item.session_type] ?? 'bg-slate-700 text-slate-300 border-slate-600'
+                            } ${item.is_completed ? 'opacity-50' : ''}`}
+                          >
+                            {item.session_type.replace(/_/g, ' ')}
+                          </span>
+                          <span className={`text-sm ${item.is_completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                            {item.title}
+                          </span>
+                          {isToday && !item.is_completed && (
+                            <span className="text-xs font-medium text-indigo-400 bg-indigo-600/20 px-1.5 py-0.5 rounded">Today</span>
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="text-xs text-slate-400 mt-1 ml-9">{item.description}</p>
                         )}
-                        {item.target_distance_km && (
-                          <span className="text-xs text-slate-500">{item.target_distance_km} km</span>
-                        )}
+                        <div className="flex gap-3 mt-1 ml-9">
+                          {item.duration_min && (
+                            <span className="text-xs text-slate-500">{item.duration_min} min</span>
+                          )}
+                          {item.target_distance_km && (
+                            <span className="text-xs text-slate-500">{item.target_distance_km} km</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -171,13 +193,39 @@ export function Plans() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['plans'] })
       qc.invalidateQueries({ queryKey: ['plan', selectedId] })
-      toast('success', 'Plan activated')
+      qc.invalidateQueries({ queryKey: ['active-plan'] })
+      toast('success', 'Plan activated — scheduled from this Monday')
     },
     onError: () => toast('error', 'Failed to activate plan'),
   })
 
+  const toggleItemMutation = useMutation({
+    mutationFn: (itemId: string) => agentApi.toggleItemComplete(itemId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['plan', selectedId] })
+      qc.invalidateQueries({ queryKey: ['active-plan'] })
+    },
+  })
+
   const selectedPlan = plans?.find(p => p.id === selectedId)
   const isActive = selectedPlan?.status === 'active'
+
+  // Adherence stats for the selected plan
+  const adherence = (() => {
+    if (!planDetail) return null
+    const items = planDetail.items ?? []
+    const today = new Date().toISOString().slice(0, 10)
+    const due = items.filter(i => i.actual_date && i.actual_date <= today && i.session_type !== 'rest')
+    const done = due.filter(i => i.is_completed)
+    const total = items.filter(i => i.session_type !== 'rest').length
+    const currentWeek = planDetail.start_date
+      ? Math.min(
+          Math.floor((new Date().getTime() - new Date(planDetail.start_date).getTime()) / (7 * 86400000)) + 1,
+          planDetail.duration_weeks
+        )
+      : null
+    return { due: due.length, done: done.length, total, currentWeek }
+  })()
 
   const chipCls = (active: boolean) =>
     `px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer ${
@@ -330,28 +378,68 @@ export function Plans() {
 
           {selectedId && !loadingDetail && planDetail && (
             <div className="space-y-4">
-              {/* Plan header with activate button */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              {/* Plan header */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm text-slate-400">{planDetail.duration_weeks} weeks</span>
+                  {isActive && adherence?.currentWeek && (
+                    <span className="text-xs text-slate-400">
+                      · Week {adherence.currentWeek} of {planDetail.duration_weeks}
+                    </span>
+                  )}
                   {isActive && (
                     <span className="flex items-center gap-1 text-xs font-medium text-green-400 bg-green-400/10 border border-green-400/20 rounded-full px-2.5 py-0.5">
                       <Zap size={10} /> Active
                     </span>
                   )}
                 </div>
-                {!isActive && (
-                  <button
-                    onClick={() => activateMutation.mutate(selectedId)}
-                    disabled={activateMutation.isPending}
-                    className="flex items-center gap-1.5 text-xs font-medium text-indigo-400 hover:text-white border border-indigo-500/40 hover:bg-indigo-600 hover:border-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {activateMutation.isPending ? <Spinner size={12} /> : <Zap size={12} />}
-                    Activate plan
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {!isActive && (
+                    <button
+                      onClick={() => activateMutation.mutate(selectedId)}
+                      disabled={activateMutation.isPending}
+                      className="flex items-center gap-1.5 text-xs font-medium text-indigo-400 hover:text-white border border-indigo-500/40 hover:bg-indigo-600 hover:border-indigo-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {activateMutation.isPending ? <Spinner size={12} /> : <Zap size={12} />}
+                      Activate plan
+                    </button>
+                  )}
+                  {/* Regenerate button — shown when ≥30% through plan */}
+                  {isActive && adherence && adherence.due / Math.max(adherence.total, 1) >= 0.3 && (
+                    <button
+                      onClick={() => { setGenerating(true); setGoal(planDetail.goal) }}
+                      className="flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-white border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <RefreshCw size={12} /> Regenerate plan
+                    </button>
+                  )}
+                </div>
               </div>
-              <PlanView plan={planDetail} />
+
+              {/* Adherence bar */}
+              {isActive && adherence && adherence.due > 0 && (
+                <div className="bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400">Sessions completed</span>
+                    <span className="text-xs font-medium text-white">
+                      {adherence.done}/{adherence.due} due · {adherence.total} total
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (adherence.done / Math.max(adherence.due, 1)) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5">
+                    {adherence.done >= adherence.due
+                      ? '🎉 On track!'
+                      : `${adherence.due - adherence.done} session${adherence.due - adherence.done > 1 ? 's' : ''} behind — keep going`}
+                  </p>
+                </div>
+              )}
+
+              <PlanView plan={planDetail} onToggleItem={id => toggleItemMutation.mutate(id)} />
             </div>
           )}
 

@@ -118,6 +118,74 @@ function AiBriefing() {
   )
 }
 
+// ── Today's session from active plan ─────────────────────────────────────────
+
+const SESSION_TYPE_LABEL: Record<string, string> = {
+  easy_run: '🏃 Easy run',
+  tempo_run: '⚡ Tempo run',
+  interval_run: '🔥 Intervals',
+  long_run: '🛤️ Long run',
+  strength: '🏋️ Strength',
+  mobility: '🧘 Mobility',
+  rest: '😴 Rest day',
+  cross_training: '🚴 Cross-training',
+}
+
+function TodaySession() {
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: plan } = useQuery({
+    queryKey: ['active-plan'],
+    queryFn: () => agentApi.getActivePlan().then(r => r.data).catch(() => null),
+    staleTime: 60_000,
+  })
+
+  if (!plan) return null
+  const todayItems = plan.items?.filter(i => i.actual_date === today) ?? []
+  if (todayItems.length === 0) {
+    // Check if today is a rest day or just not scheduled
+    const scheduled = plan.items?.some(i => i.actual_date && i.actual_date >= today)
+    if (!scheduled) return null
+    return (
+      <div className="bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 flex items-center gap-3">
+        <span className="text-lg">😴</span>
+        <div>
+          <p className="text-sm font-medium text-white">Rest day</p>
+          <p className="text-xs text-slate-500">{plan.goal} plan · active</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {todayItems.map(item => (
+        <div key={item.id} className={`border rounded-xl px-4 py-3 flex items-center justify-between gap-3 ${
+          item.is_completed
+            ? 'bg-green-500/5 border-green-500/20'
+            : 'bg-slate-800/60 border-indigo-500/30'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className="text-lg">{item.is_completed ? '✅' : SESSION_TYPE_LABEL[item.session_type]?.slice(0, 2) ?? '📋'}</span>
+            <div>
+              <p className={`text-sm font-medium ${item.is_completed ? 'text-slate-400 line-through' : 'text-white'}`}>
+                {item.title}
+              </p>
+              <p className="text-xs text-slate-500">
+                {SESSION_TYPE_LABEL[item.session_type]?.slice(3) ?? item.session_type}
+                {item.duration_min ? ` · ${item.duration_min} min` : ''}
+                {' · '}Week {item.week_number} of {plan.duration_weeks}
+              </p>
+            </div>
+          </div>
+          {item.is_completed && (
+            <span className="text-xs text-green-400 font-medium">Done ✓</span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export function Dashboard() {
@@ -194,6 +262,9 @@ export function Dashboard() {
           icon={<BarChart2 size={14} />}
         />
       </div>
+
+      {/* ── Today's session from active plan ── */}
+      <TodaySession />
 
       {/* ── AI briefing ── */}
       <AiBriefing />

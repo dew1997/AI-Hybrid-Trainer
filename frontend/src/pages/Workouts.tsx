@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { workoutsApi } from '../api/workouts'
+import { agentApi } from '../api/agent'
 import { Badge } from '../components/Badge'
 import { Spinner } from '../components/Spinner'
 import { WorkoutDetail } from '../components/WorkoutDetail'
@@ -126,11 +127,24 @@ function WorkoutRow({ w, onClick, hasPR, onDelete }: { w: Workout; onClick: () =
 
 // ── Calendar ──────────────────────────────────────────────────────────────────
 
+const PLAN_SESSION_COLORS: Record<string, string> = {
+  easy_run: 'bg-blue-400',
+  tempo_run: 'bg-yellow-400',
+  interval_run: 'bg-orange-400',
+  long_run: 'bg-purple-400',
+  strength: 'bg-pink-400',
+  mobility: 'bg-teal-400',
+  rest: 'bg-slate-500',
+  cross_training: 'bg-green-400',
+}
+
 function WorkoutCalendar({
   dayMap,
+  planMap,
   onWorkoutClick,
 }: {
   dayMap: Record<string, Workout[]>
+  planMap: Record<string, { session_type: string; title: string; is_completed: boolean }[]>
   onWorkoutClick: (id: string) => void
 }) {
   const today = new Date()
@@ -208,10 +222,12 @@ function WorkoutCalendar({
           if (!d) return <div key={i} className="aspect-square" />
           const key = fmt(d)
           const dayWorkouts = dayMap[key] ?? []
+          const plannedSessions = planMap[key] ?? []
           const hasRun = dayWorkouts.some(w => w.workout_type === 'run')
           const hasGym = dayWorkouts.some(w => w.workout_type === 'gym')
           const isToday = key === todayStr
           const isSelected = key === selected
+          const hasAnything = dayWorkouts.length > 0 || plannedSessions.length > 0
 
           return (
             <button
@@ -220,19 +236,29 @@ function WorkoutCalendar({
               className={`aspect-square flex flex-col items-center justify-center rounded-lg transition-colors relative ${
                 isSelected ? 'bg-indigo-600/30 border border-indigo-500' :
                 isToday ? 'ring-2 ring-indigo-500 ring-inset bg-slate-800' :
-                dayWorkouts.length > 0 ? 'bg-slate-800 hover:bg-slate-700' :
+                hasAnything ? 'bg-slate-800 hover:bg-slate-700' :
                 'hover:bg-slate-800/60'
               }`}
             >
-              <span className={`text-xs ${isToday ? 'font-bold text-indigo-400' : dayWorkouts.length > 0 ? 'text-white' : 'text-slate-500'}`}>
+              <span className={`text-xs ${isToday ? 'font-bold text-indigo-400' : hasAnything ? 'text-white' : 'text-slate-500'}`}>
                 {d.getDate()}
               </span>
-              {dayWorkouts.length > 0 && (
-                <div className="flex gap-0.5 mt-0.5">
-                  {hasRun && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
-                  {hasGym && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
-                </div>
-              )}
+              <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center max-w-full px-0.5">
+                {/* Logged workouts — solid dots */}
+                {hasRun && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                {hasGym && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
+                {/* Planned sessions — ring dots (completed = filled, pending = ring) */}
+                {plannedSessions.filter(s => s.session_type !== 'rest').slice(0, 2).map((s, i) => (
+                  <span
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      s.is_completed
+                        ? (PLAN_SESSION_COLORS[s.session_type] ?? 'bg-slate-400')
+                        : 'border border-slate-400'
+                    }`}
+                  />
+                ))}
+              </div>
             </button>
           )
         })}
@@ -249,9 +275,9 @@ function WorkoutCalendar({
       </div>
 
       {/* Day detail popover */}
-      {selected && popoverPos && selectedWorkouts.length > 0 && (
+      {selected && popoverPos && (selectedWorkouts.length > 0 || (planMap[selected] ?? []).length > 0) && (
         <div
-          className="absolute z-30 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl p-3 space-y-2"
+          className="absolute z-30 w-60 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl p-3 space-y-2"
           style={{ top: popoverPos.top, left: popoverPos.left }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -262,6 +288,8 @@ function WorkoutCalendar({
               <X size={13} />
             </button>
           </div>
+
+          {/* Logged workouts */}
           {selectedWorkouts.map(w => (
             <button
               key={w.id}
@@ -283,6 +311,21 @@ function WorkoutCalendar({
                 </p>
               </div>
             </button>
+          ))}
+
+          {/* Planned sessions (from active plan) */}
+          {(planMap[selected] ?? []).filter(s => s.session_type !== 'rest').map((s, i) => (
+            <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${
+              s.is_completed ? 'opacity-50' : 'border border-dashed border-slate-600'
+            }`}>
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${PLAN_SESSION_COLORS[s.session_type] ?? 'bg-slate-400'}`} />
+              <div className="min-w-0">
+                <p className={`text-xs font-medium truncate ${s.is_completed ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
+                  {s.title}
+                </p>
+                <p className="text-xs text-slate-600">{s.is_completed ? 'Done ✓' : 'Planned'}</p>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -339,6 +382,14 @@ export function Workouts() {
     enabled: viewMode === 'calendar',
   })
 
+  // Active plan items for calendar overlay
+  const { data: activePlan } = useQuery({
+    queryKey: ['active-plan'],
+    queryFn: () => agentApi.getActivePlan().then(r => r.data).catch(() => null),
+    enabled: viewMode === 'calendar',
+    staleTime: 60_000,
+  })
+
   useEffect(() => {
     if (!data) return
     if (prevFilter.current !== typeFilter) {
@@ -370,6 +421,17 @@ export function Workouts() {
     }
     return map
   }, [calendarData])
+
+  // Build planMap: date → planned sessions from active plan
+  const planMap = useMemo(() => {
+    const map: Record<string, { session_type: string; title: string; is_completed: boolean }[]> = {}
+    for (const item of activePlan?.items ?? []) {
+      if (!item.actual_date) continue
+      if (!map[item.actual_date]) map[item.actual_date] = []
+      map[item.actual_date].push({ session_type: item.session_type, title: item.title, is_completed: item.is_completed })
+    }
+    return map
+  }, [activePlan])
 
   // PR detection: does a gym workout contain a set matching the current PR 1RM?
   const hasPR = (w: Workout): boolean => {
@@ -448,6 +510,7 @@ export function Workouts() {
       {viewMode === 'calendar' && (
         <WorkoutCalendar
           dayMap={dayMap}
+          planMap={planMap}
           onWorkoutClick={id => setSelectedId(id)}
         />
       )}
