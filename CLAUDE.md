@@ -3,16 +3,18 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-Production-grade AI fitness coaching platform. Tracks hybrid training (running + gym),
-processes performance data via a Celery pipeline, and uses an LLM + RAG to generate
-coaching insights and training plans via an AI agent.
+AI Hybrid Trainer — a web app for hybrid athletes (running + gym) that logs workouts, generates
+AI-powered training plans from actual workout data, and provides an AI coaching chatbot.
+Built by and for a solo hybrid athlete. Core pain point: balancing and progressively improving
+both running and gym training over 2–3 month plan cycles.
 
 ## Stack
 - **Backend**: FastAPI (Python 3.12), async SQLAlchemy + asyncpg
 - **Database**: PostgreSQL 16 + pgvector extension
 - **Queue**: Celery + Redis
-- **AI**: OpenRouter API (OpenAI-compatible, default model `meta-llama/llama-3.3-70b-instruct:free`), sentence-transformers all-MiniLM-L6-v2 (RAG embeddings, local)
-- **Frontend**: React 19 + TypeScript, Vite, TanStack Query, Recharts, Tailwind CSS v4
+- **AI**: OpenRouter (OpenAI-compatible) — model `openai/gpt-oss-20b:free` via `openai.AsyncOpenAI`. **Requires** `HTTP-Referer: http://localhost:8000` and `X-Title: AI Hybrid Trainer` headers on every completions call or returns 401.
+- **Embeddings**: sentence-transformers `all-MiniLM-L6-v2` (local, no API key)
+- **Frontend**: React 19 + TypeScript, Vite, TanStack Query, Recharts, Tailwind CSS v4, react-markdown
 - **Deploy**: GCP Cloud Run + Cloud SQL
 
 ## Local Development
@@ -21,20 +23,25 @@ coaching insights and training plans via an AI agent.
 # Start all services
 docker-compose up
 
-# Run DB migrations (first time or after new migration)
+# IMPORTANT: use 'up -d' not 'restart' to reload .env changes
+docker-compose up -d api
+
+# Run DB migrations
 alembic upgrade head
 
-# Seed RAG knowledge base (run once after first setup)
+# Seed RAG knowledge base (run once)
 python scripts/seed_knowledge_base.py
+
+# Seed demo account with 8 weeks of workout data
+PYTHONPATH=. .venv/bin/python scripts/seed_demo_workouts.py
 
 # Run API directly (without Docker)
 uvicorn app.main:app --reload
 
-# Frontend dev server (hot reload on port 5173)
-cd frontend && npm run dev
-
-# Build frontend (outputs to frontend/dist/, served by FastAPI)
+# Frontend dev — changes need a rebuild + api restart
 cd frontend && npm run build
+docker-compose restart api   # for code changes (reloads via volume mount)
+docker-compose up -d api     # for .env changes (full container recreate)
 ```
 
 ## Testing
@@ -44,71 +51,76 @@ cd frontend && npm run build
 pytest tests/unit/ -v
 
 # Run a single test
-pytest tests/unit/test_pipeline_metrics.py::test_tss_calculation -v
+pytest tests/unit/test_pipeline_metrics.py::TestComputeAtlCtl -v
 
-# Integration tests — need test DB + Redis first:
+# Integration tests (needs test containers first)
 docker-compose -f docker-compose.test.yml up -d
 pytest tests/integration/ -v -m "not contract"
 
-# Contract tests (calls real LLM API — costs tokens)
-pytest tests/contract/ -v -m contract
-
-# Full coverage report (unit + integration combined)
-pytest tests/unit/ tests/integration/ -v -m "not contract" --cov=app --cov-report=term-missing
-
-# End-to-end UAT (requires docker-compose up + migrations + seeded KB)
+# Full UAT (requires docker-compose up + migrations + seeded KB)
 python tests/uat/run_uat.py
 ```
-
-Integration tests use a separate DB (`trainer_test` on port 5433) and Redis (port 6380)
-defined in `docker-compose.test.yml`. `tests/conftest.py` sets these env vars automatically.
 
 ## Linting & Type Checking
 
 ```bash
 ruff check .          # lint
 ruff format .         # format
-mypy app/             # type-check (strict=false, excludes alembic/ and tests/)
-cd frontend && npm run lint   # ESLint
+mypy app/             # type-check
+cd frontend && npm run lint
 ```
 
-`pyproject.toml` configures ruff (line-length 100, rules E/F/I/N/W/UP) and mypy.
-
 ## Key Architecture Decisions
-- **OpenRouter over Anthropic**: The agent uses OpenRouter's free LLMs via the OpenAI-compatible SDK (`openai.AsyncOpenAI` pointed at `https://openrouter.ai/api/v1`). No LangChain — direct API calls.
-- **pgvector in PostgreSQL**: no separate vector DB — keeps infra simple for solo dev
-- **Hybrid RAG**: semantic (pgvector cosine) + keyword (pg_trgm trigram) + RRF for better recall than naive vector search
-- **Three-tier validation**: reject/quarantine/warn avoids hard failures on imperfect data
-- **ATL/CTL/TSB**: Banister impulse-response model for training load management
-- **Single-container frontend**: `docker/Dockerfile.api` builds React then packages with FastAPI; FastAPI serves `frontend/dist/` as static files
+
+- **OpenRouter NOT Anthropic**: agent uses OpenRouter free LLMs via `openai.AsyncOpenAI` pointed at `https://openrouter.ai/api/v1`. Both `HTTP-Referer` and `X-Title` headers are required for free-tier models.
+- **Plan generation brevity**: Tool schema enforces max 12-word session descriptions and 6-word titles. Without this, 8-week plans exceed the model's 8192-token output limit and truncate mid-JSON.
+- **`persist: bool`** on `CoachingQueryRequest`: set `persist=False` for ephemeral calls (dashboard briefing) to skip `coaching_sessions` DB write.
+- **`docker-compose restart` vs `up -d`**: `restart` keeps existing env vars. `up -d` recreates the container and picks up `.env` changes.
+- **`index_elements` for analytics upsert**: constraint name `uq_analytics_user_week` never existed — the migration creates an unnamed UNIQUE constraint. Use `index_elements=["user_id", "week_start_date"]`.
+- **`session_type` ENUM**: PostgreSQL enum values are `easy_run, tempo_run, interval_run, long_run, strength, mobility, rest, cross_training`. LLM sometimes returns plain `run`/`gym` — `_coerce_session_type()` in tools.py handles this.
+- **plan `start_date`**: Set to the Monday of the current week when a plan is activated. All `TrainingPlanItem.actual_date` values are computed as `start_date + (week_number - 1) * 7 + (day_of_week - 1)` days.
+- **pgvector in PostgreSQL**: no separate vector DB
+- **Hybrid RAG**: semantic (pgvector cosine) + keyword (pg_trgm) + RRF
 
 ## Module Map
+
 | Module | Purpose |
 |--------|---------|
 | `app/api/v1/` | FastAPI route handlers (auth, workouts, analytics, agent, plans) |
-| `app/pipeline/` | Validation, metrics (TSS/ATL/CTL), Celery tasks |
+| `app/pipeline/` | Validation, metrics (TSS/ATL/CTL), Celery tasks, workout ingestion + auto-link |
 | `app/rag/` | Embeddings, chunking, hybrid retrieval, prompts |
 | `app/agent/` | OpenRouter agent loop + tool implementations |
 | `app/models/` | SQLAlchemy ORM models |
 | `app/schemas/` | Pydantic request/response models |
 | `app/db/repositories/` | Database access layer |
-| `alembic/versions/` | Database migrations |
-| `scripts/` | One-off operational scripts |
-| `tests/unit/` | Pure unit tests (no DB required) |
+| `alembic/versions/` | DB migrations (0001 initial schema, 0002 coaching sessions) |
+| `scripts/` | Operational scripts (seed KB, seed demo workouts) |
+| `tests/unit/` | Pure unit tests (no DB) |
 | `tests/integration/` | API tests with real DB |
-| `tests/contract/` | LLM API contract tests (marked `@pytest.mark.contract`) |
-| `tests/uat/` | End-to-end UAT script against live local server |
-| `frontend/src/` | React SPA (pages/, components/, hooks/, api/) |
+| `tests/uat/` | End-to-end UAT against live local server |
+| `frontend/src/pages/` | React pages (Dashboard, Workouts, LogWorkout, Coaching, Plans, Settings) |
+| `frontend/src/api/` | Axios API clients (workouts, agent, analytics, auth) |
 
-## Agent Loop
-`app/agent/coach_agent.py` runs a multi-turn loop (max 6 turns) using the OpenAI chat completions format. The four tools in `app/agent/tools.py` are: `search_knowledge_base`, `get_user_stats`, `get_recent_workouts`, `create_training_plan`. The agent pre-fetches the athlete profile + RAG context before the first LLM call to reduce tool-call latency.
+## Key API Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /workouts/exercises/history` | Last session's sets per exercise (for auto-populate) — must be before `/{id}` |
+| `GET /workouts/exercises/prs` | Personal best 1RM per exercise — must be before `/{id}` |
+| `GET /agent/plans/active` | Returns active plan with `actual_date` per item — must be before `/{id}` |
+| `PATCH /agent/plans/items/{id}/complete` | Toggle item done/undone — must be before `/{plan_id}` |
+| `POST /agent/coaching-query` | AI coaching — pass `persist: false` for ephemeral calls |
+
+## Demo Account
+- Email: `demo@aihybridtrainer.com` / Password: `Demo1234!`
+- 8 weeks of seeded PPL gym + run data
+- Re-seed: delete workouts via SQL first, then `PYTHONPATH=. .venv/bin/python scripts/seed_demo_workouts.py`
 
 ## Environment Variables
-See `.env.example` for all required variables. Key ones:
-- `OPENROUTER_API_KEY` — required for AI features (free at openrouter.ai)
+See `.env.example`. Key ones:
+- `OPENROUTER_API_KEY` — required (get free key at openrouter.ai)
+- `OPENROUTER_MODEL` — defaults to `openai/gpt-oss-20b:free`
 - `SECRET_KEY` — generate with `openssl rand -hex 32`
-- `DATABASE_URL` — asyncpg connection string
-- `OPENROUTER_MODEL` — defaults to `meta-llama/llama-3.3-70b-instruct:free`
 
 ## Commit Convention
-Semantic commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`, `refactor:`
+Semantic commits with elaborated body: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`, `refactor:`
