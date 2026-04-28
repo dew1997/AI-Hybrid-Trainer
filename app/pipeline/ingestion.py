@@ -84,6 +84,9 @@ async def ingest_workout(
     )
     workout = result.scalar_one()
 
+    # Auto-link to active training plan item for this day
+    await _autolink_plan_item(workout, db)
+
     # Enqueue async pipeline processing (fire-and-forget)
     if status == "pending":
         try:
@@ -99,3 +102,53 @@ async def ingest_workout(
         status=status,
     )
     return workout
+
+
+async def _autolink_plan_item(workout: Workout, db: AsyncSession) -> None:
+    """If the user has an active plan with a session scheduled for this workout's date,
+    mark it complete and link it to this workout."""
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from app.api.v1.plans import WORKOUT_TYPE_TO_SESSION_TYPES
+    from app.models.training_plan import TrainingPlan, TrainingPlanItem
+
+    compatible_types = WORKOUT_TYPE_TO_SESSION_TYPES.get(workout.workout_type, set())
+    if not compatible_types:
+        return
+
+    plan_result = await db.execute(
+        select(TrainingPlan).where(
+            TrainingPlan.user_id == workout.user_id,
+            TrainingPlan.status == "active",
+            TrainingPlan.start_date.isnot(None),
+        )
+    )
+    plan = plan_result.scalar_one_or_none()
+    if not plan or not plan.start_date:
+        return
+
+    workout_date = workout.started_at.date()
+
+    # Find all plan items whose computed date matches the workout date
+    items_result = await db.execute(
+        select(TrainingPlanItem).where(
+            TrainingPlanItem.plan_id == plan.id,
+            TrainingPlanItem.is_completed.is_(False),
+            TrainingPlanItem.session_type.in_(list(compatible_types)),
+        )
+    )
+    for item in items_result.scalars().all():
+        item_date = plan.start_date + timedelta(
+            days=(item.week_number - 1) * 7 + (item.day_of_week - 1)
+        )
+        if item_date == workout_date:
+            item.is_completed = True
+            item.completed_workout_id = workout.id
+            logger.info(
+                "plan_item_auto_linked",
+                item_id=str(item.id),
+                workout_id=str(workout.id),
+            )
+            break  # link first matching item only
